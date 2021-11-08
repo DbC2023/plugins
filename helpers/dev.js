@@ -1,3 +1,21 @@
+// Development-related helper functions
+
+/**
+ * JSON.stringify() with support for Prototype properties
+ * @param {object} obj
+ * @param {boolean} prettyPrint - if true, will return a string with newlines and indentation
+ * @returns {string} stringified object
+ * @example console.log(JSP(obj, true)) // prints the full object with newlines and indentation
+ */
+export function JSP(obj, prettyPrint = 2) {
+  const propNames = getAllPropertyNames(obj)
+  const fullObj = propNames.reduce((acc, propName) => {
+    acc[propName] = obj[propName]
+    return acc
+  }, {})
+  return JSON.stringify(fullObj, null, prettyPrint ?? null)
+}
+
 /**
  * @description Create a list of the properties of an object, including inherited properties (which are not typically visible in JSON.stringify)
  * @param {object} obj
@@ -12,21 +30,6 @@ export function getAllPropertyNames(obj) {
       if (/^__/.test(op[i]) === false && op[i] !== 'constructor' && p.indexOf(op[i]) === -1) p.push(op[i])
   }
   return p
-}
-
-/**
- * JSON.stringify() with support for Prototype properties
- * @param {object} obj
- * @param {boolean} prettyPrint - if true, will return a string with newlines and indentation
- * @returns {string} stringified object
- */
-export function JSP(obj, prettyPrint = false) {
-  const propNames = getAllPropertyNames(obj)
-  const fullObj = propNames.reduce((acc, propName) => {
-    acc[propName] = obj[propName]
-    return acc
-  }, {})
-  return JSON.stringify(fullObj, null, prettyPrint ? 2 : null)
 }
 
 /**
