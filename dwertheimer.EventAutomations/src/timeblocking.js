@@ -27,12 +27,7 @@ import { logAllPropertyNames, getAllPropertyNames, JSP } from '../../helpers/dev
 function logEventDetails(input) {
   input.forEach((event) => {
     const isSameDay = differenceInCalendarDays(event.date, event.endDate) === 0
-    console.log('get')
-    console.log(getAllPropertyNames(event))
-    console.log('log')
-    logAllPropertyNames(event)
-    console.log(`JSP:\n${JSP(event, true)}`)
-
+    console.log(`JSP:\n${JSP(event, 2)}`)
     console.log(
       `${event.title} isAllDay:${event.isAllDay} date:${event.date} endDate:${event.endDate} isSameDay=${isSameDay} ${event.availability}`,
     )
@@ -96,7 +91,7 @@ function keepTodayPortionOnly(input): Array<TCalendarItem> {
 function getTodaysTodos(pNote: TNote | null = null): Array<TParagraph> {
   const note = pNote || Editor.note
   const backlinks = [...note.backlinks] // an array of notes which link to this note
-  backlinks.forEach((link, i) => console.log(`backlink[${i}] ${JSON.stringify(Object.keys(link))} ${link.content}`))
+  backlinks.forEach((link, i) => console.log(JSP(link, 2)))
   console.log(`${JSON.stringify(backlinks)}`)
   return backlinks
 }
