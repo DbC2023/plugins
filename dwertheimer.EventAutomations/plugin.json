@@ -22,6 +22,12 @@
       "description": "creates a note from a calendar event",
       "jsFunction": "createNoteForCalendarItemWithoutQuickTemplate",
       "alias": ["calNote","calendar note","meeting note"]
+    },
+    {
+      "name": "Insert Todos As Timeblocks",
+      "description": "Read >today todos and insert them into today's calendar note as timeblocks",
+      "jsFunction": "insertTodosAsTimeblocks",
+      "alias": ["timeblocks","block","todoblocks"]
     }
   ]
 }
