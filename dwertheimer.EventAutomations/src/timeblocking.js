@@ -3,11 +3,20 @@
 /**
  * WHERE AM I?
  * The events are all loading. Need to now create a map of the events and look for empties
+ * have the insertion ready to go but need to know times to insert
  */
 import { differenceInCalendarDays, endOfDay, startOfDay, eachMinuteOfInterval, formatISO9075 } from 'date-fns'
 import { getEventsForDay, type HourMinObj, listDaysEvents } from '../../jgclark.EventHelpers/src/eventsToNotes'
-import { toLocaleTime, getTodaysDateUnhyphenated, dateStringFromCalendarFilename } from '../../helpers/dateTime'
+import {
+  toLocaleTime,
+  getTodaysDateUnhyphenated,
+  dateStringFromCalendarFilename,
+  removeDateTags,
+  toISODateString,
+  todaysDateISOString,
+} from '../../helpers/dateTime'
 import { showMessage } from '../../helpers/userInput'
+import { calcSmartPrependPoint } from '../../helpers/paragraph'
 import { logAllPropertyNames, getAllPropertyNames, JSP } from '../../helpers/dev'
 
 /* TCalendarItem is a type for the calendar items:
@@ -23,32 +32,102 @@ import { logAllPropertyNames, getAllPropertyNames, JSP } from '../../helpers/dev
   ): TCalendarItem,
 */
 
+function getTimeBlockingDefaults() {
+  let def = {
+    todoChar: '*',
+    timeBlockTag: `#🕑`,
+    timeBlockHeading: 'Time Blocks',
+    workDayStart: '08:00',
+    workDayEnd: '18:00',
+  }
+  return def
+}
+
 // This is just for debug
 function logEventDetails(input) {
   input.forEach((event) => {
     const isSameDay = differenceInCalendarDays(event.date, event.endDate) === 0
-    console.log(`JSP:\n${JSP(event, 2)}`)
-    console.log(
-      `${event.title} isAllDay:${event.isAllDay} date:${event.date} endDate:${event.endDate} isSameDay=${isSameDay} ${event.availability}`,
-    )
+    // console.log(`JSP:\n${JSP(event, 2)}`)
   })
 }
 
 /**
- *
+ * Create a map of the time intervals for the day
  * @param {*} start
  * @param {*} end
  * @param {*} valueToSet
  * @param {*} options
- * @returns Array of objects with the following properties: [{"start":"2021-11-06 00:00","value":null},{"start":"2021-11-06 00:05","value":null},
+ * @returns Array of objects with the following properties: [{"start":"00:00","busy":false},{"start":"00:05","busy":false}...]
  */
-function createIntervalMap(start, end, valueToSet = null, options = { step: 5 }) {
+function createIntervalMap(start, end, valueToSet = false, options = { step: 5 }) {
   const intervals = eachMinuteOfInterval({ start, end }, options)
-  return intervals.map((interval) => ({ start: formatISO9075(interval).slice(0, -3), value: valueToSet }))
+  return intervals.map((interval) => {
+    const start = formatISO9075(interval).slice(0, -3)
+    const time = start.split(' ')[1]
+    return { start: time, busy: valueToSet }
+  })
 }
 
 function getBlankDayMap() {
   return createIntervalMap(startOfDay(new Date()), endOfDay(new Date()))
+}
+
+function blockTimeFor(timeMap, start, end, itemName = true) {
+  return timeMap.map((t) => {
+    if (t.start >= start && t.start <= end) {
+      t.busy = itemName
+    }
+    return t
+  })
+}
+
+async function insertContentUnderHeading(destNote: TNote, headingToFind: string, parasAsText: string) {
+  const destNoteParas = destNote.paragraphs
+  let insertionIndex = 1 // top of note by default
+  //   console.log(`insertionIndex:${insertionIndex}`)
+  for (let i = 0; i < destNoteParas.length; i++) {
+    const p = destNoteParas[i]
+    if (p.content.trim() === headingToFind && p.type === 'title') {
+      insertionIndex = i + 1
+      break
+    }
+  }
+  //   console.log(`  Inserting at index ${insertionIndex}`)
+  await destNote.insertParagraph(parasAsText, insertionIndex, 'empty')
+}
+
+async function eraseAllTimeblocks(destNote: TNote) {
+  const timeBlockTag = getTimeBlockingDefaults().timeBlockTag
+  const destNoteParas = destNote.paragraphs
+  let parasToDelete = []
+  for (let i = 0; i < destNoteParas.length; i++) {
+    const p = destNoteParas[i]
+    if (new RegExp(timeBlockTag, 'g').test(p.content)) {
+      parasToDelete.push(p[i])
+    }
+  }
+  console.log(`parasToDelete:${parasToDelete.length}`)
+  if (parasToDelete.length > 0) {
+    console.log(JSP(parasToDelete, 2))
+    // destNote.removeParagraphs(parasToDelete) //This line crashes the app
+  }
+}
+
+function removeDateTagsAndToday(tag: string): string {
+  const t = removeDateTags(tag)
+  return t.replace(/>today/, '')
+}
+
+function attachTimeblockTag(content: string): string {
+  const timeblockTag = getTimeBlockingDefaults().timeBlockTag
+  const regEx = new RegExp(timeblockTag, 'g')
+  return content.replace(regEx, '') + timeblockTag
+}
+
+function createTimeBlockLine(content: string, start: string, end: string): string {
+  const taskChar = getTimeBlockingDefaults().todoChar
+  const newContentLine = attachTimeblockTag(content)
+  return `${taskChar} ${start}-${end} ${newContentLine}`
 }
 
 /**
@@ -88,12 +167,27 @@ function keepTodayPortionOnly(input): Array<TCalendarItem> {
   })
 }
 
+/**
+ * Get linked items from the references section (.backlinks)
+ * @param { note | null} pNote
+ * @returns
+ * Backlinks format: {"type":"note","content":"_Testing scheduled sweeping","rawContent":"_Testing scheduled sweeping","prefix":"","lineIndex":0,"heading":"","headingLevel":0,"isRecurring":0,"indents":0,"filename":"zDELETEME/Test scheduled.md","noteType":"Notes","linkedNoteTitles":[],"subItems":[{},{},{},{}]}
+ * backlinks[0].subItems[0] =JSLog: {"type":"open","content":"scheduled for 10/4 using app >today","rawContent":"* scheduled for 10/4 using app >today","prefix":"* ","contentRange":{},"lineIndex":2,"date":"2021-11-07T07:00:00.000Z","heading":"_Testing scheduled sweeping","headingRange":{},"headingLevel":1,"isRecurring":0,"indents":0,"filename":"zDELETEME/Test scheduled.md","noteType":"Notes","linkedNoteTitles":[],"subItems":[]}
+ */
 function getTodaysTodos(pNote: TNote | null = null): Array<TParagraph> {
   const note = pNote || Editor.note
   const backlinks = [...note.backlinks] // an array of notes which link to this note
-  backlinks.forEach((link, i) => console.log(JSP(link, 2)))
-  console.log(`${JSON.stringify(backlinks)}`)
-  return backlinks
+
+  const linkedItemsContent = []
+  backlinks.forEach((link, i) => {
+    const subItems = link.subItems
+    subItems.forEach((subItem, j) => {
+      linkedItemsContent.push(removeDateTagsAndToday(subItem.content))
+    })
+  })
+  console.log(`LinkedItems: ${JSP(linkedItemsContent, null)}`)
+
+  return linkedItemsContent
 }
 
 export async function insertTodosAsTimeblocks(useQuickTemplate: boolean = true): Promise<void> {
@@ -106,7 +200,15 @@ export async function insertTodosAsTimeblocks(useQuickTemplate: boolean = true):
     eArr = getTimedEntries(eArr)
     eArr = keepTodayPortionOnly(eArr)
     const blankDayMap = getBlankDayMap()
-    getTodaysTodos()
+    console.log(`blankDayMap: ${JSP(blankDayMap, null)}`)
+    const todos = getTodaysTodos()
+    eraseAllTimeblocks(Editor.note)
+    // testing
+    todos.forEach((todo) => {
+      const line = createTimeBlockLine(todo, '08:00', '10:00')
+      insertContentUnderHeading(Editor.note, 'Time Blocks', line)
+    })
+
     // console.log(JSON.stringify(blankDayMap))
     // FIXME: I am here. Have an empty map of the day.
     // blankDayMap = [{"start":"2021-11-06 00:00","value":null},{"start":"2021-11-06 00:05","value":null},
