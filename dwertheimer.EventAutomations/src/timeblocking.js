@@ -51,6 +51,8 @@ function logEventDetails(input) {
   })
 }
 
+type IntervalMap = Array<{ start: string, busy: string | false }>
+
 /**
  * Create a map of the time intervals for the day
  * @param {*} start
@@ -59,7 +61,7 @@ function logEventDetails(input) {
  * @param {*} options
  * @returns Array of objects with the following properties: [{"start":"00:00","busy":false},{"start":"00:05","busy":false}...]
  */
-function createIntervalMap(start, end, valueToSet = false, options = { step: 5 }) {
+function createIntervalMap(start, end, valueToSet = false, options = { step: 5 }): IntervalMap {
   const intervals = eachMinuteOfInterval({ start, end }, options)
   return intervals.map((interval) => {
     const start = formatISO9075(interval).slice(0, -3)
@@ -72,7 +74,7 @@ function getBlankDayMap() {
   return createIntervalMap(startOfDay(new Date()), endOfDay(new Date()))
 }
 
-function blockTimeFor(timeMap, start, end, itemName = true) {
+export function blockTimeFor(timeMap, start, end, itemName = true) {
   return timeMap.map((t) => {
     if (t.start >= start && t.start <= end) {
       t.busy = itemName
