@@ -15,6 +15,7 @@ import {
   toISODateString,
   todaysDateISOString,
 } from '../../helpers/dateTime'
+import { sortListBy, getTasksByType } from '../../dwertheimer.TaskAutomations/src/taskHelpers'
 import { showMessage } from '../../helpers/userInput'
 import { calcSmartPrependPoint } from '../../helpers/paragraph'
 import { logAllPropertyNames, getAllPropertyNames, JSP } from '../../helpers/dev'
@@ -133,20 +134,20 @@ function keepTodayPortionOnly(input): Array<TCalendarItem> {
  * Backlinks format: {"type":"note","content":"_Testing scheduled sweeping","rawContent":"_Testing scheduled sweeping","prefix":"","lineIndex":0,"heading":"","headingLevel":0,"isRecurring":0,"indents":0,"filename":"zDELETEME/Test scheduled.md","noteType":"Notes","linkedNoteTitles":[],"subItems":[{},{},{},{}]}
  * backlinks[0].subItems[0] =JSLog: {"type":"open","content":"scheduled for 10/4 using app >today","rawContent":"* scheduled for 10/4 using app >today","prefix":"* ","contentRange":{},"lineIndex":2,"date":"2021-11-07T07:00:00.000Z","heading":"_Testing scheduled sweeping","headingRange":{},"headingLevel":1,"isRecurring":0,"indents":0,"filename":"zDELETEME/Test scheduled.md","noteType":"Notes","linkedNoteTitles":[],"subItems":[]}
  */
-function getTodaysTodos(pNote: TNote | null = null): Array<TParagraph> {
+function getTodaysTodoParagraphs(pNote: TNote | null = null): Array<TParagraph> {
   const note = pNote || Editor.note
   if (note) {
     const backlinks = [...(note.backlinks || {})] // an array of notes which link to this note
 
-    const linkedItemsContent = []
+    const todayParas = []
     backlinks.forEach((link, i) => {
       const subItems = link.subItems
       subItems.forEach((subItem, j) => {
-        linkedItemsContent.push(removeDateTagsAndToday(subItem.content))
+        todayParas.push(subItem)
       })
     })
-    console.log(`LinkedItems: ${JSP(linkedItemsContent, null)}`)
-    return linkedItemsContent
+    // console.log(`LinkedItems: ${JSP(todayParas, null)}`)
+    return todayParas
   } else {
     console.log(`timeblocking could not open Note`)
     return []
@@ -163,14 +164,28 @@ export async function insertTodosAsTimeblocks(useQuickTemplate: boolean = true):
     eArr = getTimedEntries(eArr)
     eArr = keepTodayPortionOnly(eArr)
     const blankDayMap = getBlankDayMap()
-    console.log(`blankDayMap: ${JSP(blankDayMap, null)}`)
-    const todos = getTodaysTodos()
+    // console.log(`blankDayMap: ${JSP(blankDayMap, null)}`)
     eraseAllTimeblocks(Editor.note)
     // testing
     const eventMap = blockOutEvents(eArr, blankDayMap)
-    todos.forEach((todo) => {
+    const todosParagraphs = getTodaysTodoParagraphs()
+    const cleanTodayTodoParas = todosParagraphs.map((p) => {
+      console.log(`p.type:${p.type}`)
+      return {
+        indents: p.indents,
+        type: p.type,
+        content: removeDateTagsAndToday(p.content),
+        rawContent: removeDateTagsAndToday(p.rawContent),
+      }
+    })
+    const tasksByType = cleanTodayTodoParas.length ? getTasksByType(cleanTodayTodoParas) : null
+    // TODO: Verify that tasks are always OPEN
+    console.log(`tasksByType:` + JSP(tasksByType, 2))
+    const sortedTodos = tasksByType ? sortListBy(tasksByType['open'], '-priority') : []
+    console.log(`sortedTodos:` + JSP(sortedTodos, 2))
+    sortedTodos.forEach((todo) => {
       const line = createTimeBlockLine(
-        todo,
+        todo.content,
         '08:00',
         '10:00',
         getTimeBlockingDefaults().timeBlockTag,

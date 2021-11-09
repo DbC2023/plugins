@@ -64,6 +64,7 @@ const fieldSorter = (fields) => (a, b) =>
  * @param array of task items
  * @param pass in field names to sort by -- either a single string or an array of strings/sort-order
  * @return the sorted task list
+ * @description Note: priority sorting is !,!!,!!!
  */
 export function sortListBy(list, fields) {
   const sortBy = typeof fields === 'string' ? [fields] : fields
