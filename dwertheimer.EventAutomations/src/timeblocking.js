@@ -18,6 +18,17 @@ import {
 import { showMessage } from '../../helpers/userInput'
 import { calcSmartPrependPoint } from '../../helpers/paragraph'
 import { logAllPropertyNames, getAllPropertyNames, JSP } from '../../helpers/dev'
+import {
+  createIntervalMap,
+  getBlankDayMap,
+  blockTimeFor,
+  removeDateTagsAndToday,
+  attachTimeblockTag,
+  createTimeBlockLine,
+  getTimedEntries,
+  getTimeStringFromDate,
+  blockOutEvents,
+} from './timeblocking-helpers'
 
 /* TCalendarItem is a type for the calendar items:
     title: string,
@@ -28,17 +39,20 @@ import { logAllPropertyNames, getAllPropertyNames, JSP } from '../../helpers/dev
     calendar?: string,
     isCompleted ?: boolean,
     notes ?: string,
-    url?: string
-  ): TCalendarItem,
+    url?: string,
+    availability?: AvailabilityType 0=busy; 1=free; 2=tentative; 3=unavailable 
+    // NOTE: MIN NP VERSION NEEDS TO BE 3.3 TO USE AVAILABILITY
+  ): TCalendarItem, 
 */
 
 function getTimeBlockingDefaults() {
-  let def = {
+  const def = {
     todoChar: '*',
     timeBlockTag: `#🕑`,
     timeBlockHeading: 'Time Blocks',
     workDayStart: '08:00',
     workDayEnd: '18:00',
+    durationMarker: "'",
   }
   return def
 }
@@ -46,40 +60,8 @@ function getTimeBlockingDefaults() {
 // This is just for debug
 function logEventDetails(input) {
   input.forEach((event) => {
-    const isSameDay = differenceInCalendarDays(event.date, event.endDate) === 0
+    const isSameDay = !event.endDate ? true : differenceInCalendarDays(event.date, event.endDate) === 0
     // console.log(`JSP:\n${JSP(event, 2)}`)
-  })
-}
-
-type IntervalMap = Array<{ start: string, busy: string | false }>
-
-/**
- * Create a map of the time intervals for the day
- * @param {*} start
- * @param {*} end
- * @param {*} valueToSet
- * @param {*} options
- * @returns Array of objects with the following properties: [{"start":"00:00","busy":false},{"start":"00:05","busy":false}...]
- */
-function createIntervalMap(start, end, valueToSet = false, options = { step: 5 }): IntervalMap {
-  const intervals = eachMinuteOfInterval({ start, end }, options)
-  return intervals.map((interval) => {
-    const start = formatISO9075(interval).slice(0, -3)
-    const time = start.split(' ')[1]
-    return { start: time, busy: valueToSet }
-  })
-}
-
-function getBlankDayMap() {
-  return createIntervalMap(startOfDay(new Date()), endOfDay(new Date()))
-}
-
-export function blockTimeFor(timeMap, start, end, itemName = true) {
-  return timeMap.map((t) => {
-    if (t.start >= start && t.start <= end) {
-      t.busy = itemName
-    }
-    return t
   })
 }
 
@@ -101,7 +83,7 @@ async function insertContentUnderHeading(destNote: TNote, headingToFind: string,
 async function eraseAllTimeblocks(destNote: TNote) {
   const timeBlockTag = getTimeBlockingDefaults().timeBlockTag
   const destNoteParas = destNote.paragraphs
-  let parasToDelete = []
+  const parasToDelete = []
   for (let i = 0; i < destNoteParas.length; i++) {
     const p = destNoteParas[i]
     if (new RegExp(timeBlockTag, 'g').test(p.content)) {
@@ -115,35 +97,9 @@ async function eraseAllTimeblocks(destNote: TNote) {
   }
 }
 
-function removeDateTagsAndToday(tag: string): string {
-  const t = removeDateTags(tag)
-  return t.replace(/>today/, '')
-}
-
-function attachTimeblockTag(content: string): string {
-  const timeblockTag = getTimeBlockingDefaults().timeBlockTag
-  const regEx = new RegExp(timeblockTag, 'g')
-  return content.replace(regEx, '') + timeblockTag
-}
-
-function createTimeBlockLine(content: string, start: string, end: string): string {
-  const taskChar = getTimeBlockingDefaults().todoChar
-  const newContentLine = attachTimeblockTag(content)
-  return `${taskChar} ${start}-${end} ${newContentLine}`
-}
-
-/**
- * @description This function takes a list of calendar items and returns a list of calendar items that are not all day
- * @param {*} input - array of calendar items
- * @returns arry of calendar items without all day events
- */
-function getTimedEntries(input): Array<TCalendarItem> {
-  return input.filter((event) => !event.isAllDay)
-}
-
 function keepTodayPortionOnly(input): Array<TCalendarItem> {
   return input.map((event) => {
-    const diff = differenceInCalendarDays(event.date, event.endDate)
+    const diff = !event.endDate ? 0 : differenceInCalendarDays(event.date, event.endDate)
     if (diff === 0) {
       return event
     } else {
@@ -151,19 +107,20 @@ function keepTodayPortionOnly(input): Array<TCalendarItem> {
       const eventCopy = { title: event.title, date: event.date, endDate: event.endDate, isAllDay: event.isAllDay } // event is immutable
       const today = new Date()
       const todayWasStart = differenceInCalendarDays(event.date, today) === 0
-      const todayWasEnd = differenceInCalendarDays(event.endDate, today) === 0
+      const todayWasEnd = !event.endDate ? true : differenceInCalendarDays(event.endDate, today) === 0
       //   console.log(`${event.title} todayWasStart:${todayWasStart} todayWasEnd:${todayWasEnd} start:${event.date}`)
       // TODO: confirm edge cases of this
       if (todayWasStart) {
         eventCopy.endDate = endOfDay(event.date)
       }
       if (todayWasEnd) {
-        eventCopy.date = startOfDay(event.endDate)
+        eventCopy.date = startOfDay(event.endDate || event.date)
       }
       if (!todayWasStart && !todayWasEnd) {
         eventCopy.date = startOfDay(today)
         eventCopy.endDate = endOfDay(today)
       }
+      // $FlowFixMe
       return eventCopy
     }
   })
@@ -178,18 +135,22 @@ function keepTodayPortionOnly(input): Array<TCalendarItem> {
  */
 function getTodaysTodos(pNote: TNote | null = null): Array<TParagraph> {
   const note = pNote || Editor.note
-  const backlinks = [...note.backlinks] // an array of notes which link to this note
+  if (note) {
+    const backlinks = [...(note.backlinks || {})] // an array of notes which link to this note
 
-  const linkedItemsContent = []
-  backlinks.forEach((link, i) => {
-    const subItems = link.subItems
-    subItems.forEach((subItem, j) => {
-      linkedItemsContent.push(removeDateTagsAndToday(subItem.content))
+    const linkedItemsContent = []
+    backlinks.forEach((link, i) => {
+      const subItems = link.subItems
+      subItems.forEach((subItem, j) => {
+        linkedItemsContent.push(removeDateTagsAndToday(subItem.content))
+      })
     })
-  })
-  console.log(`LinkedItems: ${JSP(linkedItemsContent, null)}`)
-
-  return linkedItemsContent
+    console.log(`LinkedItems: ${JSP(linkedItemsContent, null)}`)
+    return linkedItemsContent
+  } else {
+    console.log(`timeblocking could not open Note`)
+    return []
+  }
 }
 
 export async function insertTodosAsTimeblocks(useQuickTemplate: boolean = true): Promise<void> {
@@ -206,10 +167,18 @@ export async function insertTodosAsTimeblocks(useQuickTemplate: boolean = true):
     const todos = getTodaysTodos()
     eraseAllTimeblocks(Editor.note)
     // testing
+    const eventMap = blockOutEvents(eArr, blankDayMap)
     todos.forEach((todo) => {
-      const line = createTimeBlockLine(todo, '08:00', '10:00')
+      const line = createTimeBlockLine(
+        todo,
+        '08:00',
+        '10:00',
+        getTimeBlockingDefaults().timeBlockTag,
+        getTimeBlockingDefaults().timeBlockTag,
+      )
       insertContentUnderHeading(Editor.note, 'Time Blocks', line)
     })
+    const nowTimeString = getTimeStringFromDate(new Date())
 
     // console.log(JSON.stringify(blankDayMap))
     // FIXME: I am here. Have an empty map of the day.
