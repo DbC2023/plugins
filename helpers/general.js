@@ -168,3 +168,22 @@ export function capitalize(s: string): string {
   if (typeof s !== 'string') return ''
   return s.charAt(0).toUpperCase() + s.slice(1)
 }
+
+/*
+ * Multi-key sorting callback function (for use in sort())
+ * @param field list - property array
+ * @example const sortedHomes = homes.sort(fieldSorter(['state', '-price'])); //the - in front of name is DESC
+ */
+export const fieldSorter = (fields) => (a, b) =>
+  fields
+    .map((o) => {
+      let dir = 1
+      if (o[0] === '-') {
+        dir = -1
+        o = o.substring(1)
+      }
+      if (ia(a[o]) === undefined) return dir
+      if (ia(b[o]) === undefined) return -dir
+      return ia(a[o]) > ia(b[o]) ? dir : ia(a[o]) < ia(b[o]) ? -dir : 0
+    })
+    .reduce((p, n) => (p ? p : n), 0)

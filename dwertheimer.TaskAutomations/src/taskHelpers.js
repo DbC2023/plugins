@@ -1,5 +1,6 @@
 /* eslint-disable max-len */
 /* eslint-disable no-unused-vars */
+import { fieldSorter } from '../../helpers/general'
 import { hyphenatedDateString } from './dateHelpers'
 
 const HASHTAGS = /\B#([a-zA-Z0-9]+\b)/g
@@ -40,25 +41,6 @@ const ia = (val) => {
   const retVal = Array.isArray(val) ? val[0] : val
   return typeof retVal === 'string' ? retVal.toLowerCase() : retVal
 }
-
-/*
- * Multi-key sorting
- * @param field list - property array
- * @example const sortedHomes = homes.sort(fieldSorter(['state', '-price'])); //the - in front of name is DESC
- */
-const fieldSorter = (fields) => (a, b) =>
-  fields
-    .map((o) => {
-      let dir = 1
-      if (o[0] === '-') {
-        dir = -1
-        o = o.substring(1)
-      }
-      if (ia(a[o]) === undefined) return dir
-      if (ia(b[o]) === undefined) return -dir
-      return ia(a[o]) > ia(b[o]) ? dir : ia(a[o]) < ia(b[o]) ? -dir : 0
-    })
-    .reduce((p, n) => (p ? p : n), 0)
 
 /*
  * @param array of task items
@@ -126,7 +108,7 @@ export function getTasksByType(paragraphs) {
           indents: para.indents,
           children: [],
         }
-        console.log(`${index}: indents:${para.indents} ${para.rawContent}`)
+        // console.log(`${index}: indents:${para.indents} ${para.rawContent}`)
         task.priority = getNumericPriority(task)
         if (lastParent.indents < para.indents) {
           lastParent.children.push(task)
@@ -141,6 +123,6 @@ export function getTasksByType(paragraphs) {
       // console.log(`\t\tSkip: ${para.content}`) //not a task
     }
   }
-  console.log(`\tgetTasksByType Open Tasks:${tasks.open.length} returning from getTasksByType`)
+  // console.log(`\tgetTasksByType Open Tasks:${tasks.open.length} returning from getTasksByType`)
   return tasks
 }
