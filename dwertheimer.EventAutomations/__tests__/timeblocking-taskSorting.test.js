@@ -2,7 +2,8 @@
 import { exportAllDeclaration } from '@babel/types'
 import { differenceInCalendarDays, endOfDay, startOfDay, eachMinuteOfInterval, formatISO9075 } from 'date-fns'
 import * as tb from '../src/timeblocking-helpers'
-import { sortListBy, getTasksByType } from '../../dwertheimer.TaskAutomations/src/taskHelpers'
+import { getTasksByType } from '../../dwertheimer.TaskAutomations/src/taskHelpers'
+import { sortListBy } from '../../helpers/sorting'
 const _ = require('lodash')
 // import { isNullableTypeAnnotation } from '@babel/types'
 

@@ -15,7 +15,8 @@ import {
   toISODateString,
   todaysDateISOString,
 } from '../../helpers/dateTime'
-import { sortListBy, getTasksByType } from '../../dwertheimer.TaskAutomations/src/taskHelpers'
+import { getTasksByType } from '../../dwertheimer.TaskAutomations/src/taskHelpers'
+import { sortListBy } from '../../helpers/sorting'
 import { showMessage } from '../../helpers/userInput'
 import { calcSmartPrependPoint } from '../../helpers/paragraph'
 import { logAllPropertyNames, getAllPropertyNames, JSP } from '../../helpers/dev'
@@ -29,6 +30,10 @@ import {
   getTimedEntries,
   getTimeStringFromDate,
   blockOutEvents,
+  removeDateTagsFromArray,
+  getTimeBlockTimesForEvents,
+  type IntervalMap,
+  type getTimeBlockingDefaults,
 } from './timeblocking-helpers'
 
 /* TCalendarItem is a type for the calendar items:
@@ -46,7 +51,7 @@ import {
   ): TCalendarItem, 
 */
 
-function getTimeBlockingDefaults() {
+export function getTimeBlockingDefaults(): TimeBlockDefaults {
   const def = {
     todoChar: '*',
     timeBlockTag: `#🕑`,
@@ -54,6 +59,8 @@ function getTimeBlockingDefaults() {
     workDayStart: '08:00',
     workDayEnd: '18:00',
     durationMarker: "'",
+    intervalMins: 5,
+    removeDuration: true,
   }
   return def
 }
@@ -81,8 +88,7 @@ async function insertContentUnderHeading(destNote: TNote, headingToFind: string,
   await destNote.insertParagraph(parasAsText, insertionIndex, 'empty')
 }
 
-async function eraseAllTimeblocks(destNote: TNote) {
-  const timeBlockTag = getTimeBlockingDefaults().timeBlockTag
+async function eraseTimeblocksWithTBTag(destNote: TNote, timeBlockTag) {
   const destNoteParas = destNote.paragraphs
   const parasToDelete = []
   for (let i = 0; i < destNoteParas.length; i++) {
@@ -91,9 +97,9 @@ async function eraseAllTimeblocks(destNote: TNote) {
       parasToDelete.push(p[i])
     }
   }
-  console.log(`parasToDelete:${parasToDelete.length}`)
+  // console.log(`parasToDelete:${parasToDelete.length}`)
   if (parasToDelete.length > 0) {
-    console.log(JSP(parasToDelete, 2))
+    // console.log(JSP(parasToDelete, 2))
     // destNote.removeParagraphs(parasToDelete) //This line crashes the app
   }
 }
@@ -141,6 +147,7 @@ function getTodaysTodoParagraphs(pNote: TNote | null = null): Array<TParagraph> 
 
     const todayParas = []
     backlinks.forEach((link, i) => {
+      // $FlowIgnore
       const subItems = link.subItems
       subItems.forEach((subItem, j) => {
         todayParas.push(subItem)
@@ -154,52 +161,50 @@ function getTodaysTodoParagraphs(pNote: TNote | null = null): Array<TParagraph> 
   }
 }
 
+function insertItemsIntoNote(sortedTodos, taskChar, timeBlockTag) {
+  sortedTodos.forEach((todo) => {
+    const line = createTimeBlockLine(todo.content, '08:00', '10:00', taskChar, timeBlockTag)
+    if (Editor.note) {
+      insertContentUnderHeading(Editor.note, 'Time Blocks', line)
+    } else {
+      console.log(`insertItemsIntoNote: There was no Editor note`)
+    }
+  })
+}
+
+async function getPopulatedTimeMapForToday(dateStr: string, intervalMins: number): Promise<IntervalMap> {
+  // const todayEvents = await Calendar.eventsToday()
+  const eventsArray: Array<TCalendarItem> = await getEventsForDay(dateStr)
+  const eventsWithStartAndEnd = getTimedEntries(eventsArray)
+  const eventsScheduledForToday = keepTodayPortionOnly(eventsWithStartAndEnd)
+  const blankDayMap = getBlankDayMap(parseInt(intervalMins))
+  const eventMap = blockOutEvents(eventsScheduledForToday, blankDayMap)
+  return eventMap
+}
+
 export async function insertTodosAsTimeblocks(useQuickTemplate: boolean = true): Promise<void> {
   const date = getTodaysDateUnhyphenated()
-  const dateStr = dateStringFromCalendarFilename(Editor.filename)
-  if (Editor.filename && dateStr === date) {
-    const todayEvents = await Calendar.eventsToday()
-    let eArr: Array<TCalendarItem> = await getEventsForDay(dateStr)
-    logEventDetails(eArr)
-    eArr = getTimedEntries(eArr)
-    eArr = keepTodayPortionOnly(eArr)
-    const blankDayMap = getBlankDayMap()
-    // console.log(`blankDayMap: ${JSP(blankDayMap, null)}`)
-    eraseAllTimeblocks(Editor.note)
-    // testing
-    const eventMap = blockOutEvents(eArr, blankDayMap)
+  const dateStr = Editor.filename ? dateStringFromCalendarFilename(Editor.filename) : null
+  const { timeBlockTag, todoChar, workDayStart, workDayEnd, timeBlockHeading, durationMarker, intervalMins } =
+    getTimeBlockingDefaults()
+  if (Editor.filename && dateStr && dateStr === date) {
     const todosParagraphs = getTodaysTodoParagraphs()
-    const cleanTodayTodoParas = todosParagraphs.map((p) => {
-      console.log(`p.type:${p.type}`)
-      return {
-        indents: p.indents,
-        type: p.type,
-        content: removeDateTagsAndToday(p.content),
-        rawContent: removeDateTagsAndToday(p.rawContent),
-      }
-    })
+    const cleanTodayTodoParas = removeDateTagsFromArray(todosParagraphs)
     const tasksByType = cleanTodayTodoParas.length ? getTasksByType(cleanTodayTodoParas) : null
-    // TODO: Verify that tasks are always OPEN
-    console.log(`tasksByType:` + JSP(tasksByType, 2))
-    const sortedTodos = tasksByType ? sortListBy(tasksByType['open'], '-priority') : []
-    console.log(`sortedTodos:` + JSP(sortedTodos, 2))
-    sortedTodos.forEach((todo) => {
-      const line = createTimeBlockLine(
-        todo.content,
-        '08:00',
-        '10:00',
-        getTimeBlockingDefaults().timeBlockTag,
-        getTimeBlockingDefaults().timeBlockTag,
+    if (tasksByType && tasksByType['open'].length) {
+      const sortedTodos = tasksByType.length ? sortListBy(tasksByType['open'], '-priority') : []
+      const nowTimeString = getTimeStringFromDate(new Date())
+      const calendarMapWithEvents = await getPopulatedTimeMapForToday(dateStr, intervalMins)
+      const eventsToTimeblock = getTimeBlockTimesForEvents(
+        calendarMapWithEvents,
+        sortedTodos,
+        nowTimeString,
+        workDayStart,
+        workDayEnd,
       )
-      insertContentUnderHeading(Editor.note, 'Time Blocks', line)
-    })
-    const nowTimeString = getTimeStringFromDate(new Date())
-
-    // console.log(JSON.stringify(blankDayMap))
-    // FIXME: I am here. Have an empty map of the day.
-    // blankDayMap = [{"start":"2021-11-06 00:00","value":null},{"start":"2021-11-06 00:05","value":null},
-    // Now need to filter the map to remove time before now
-    // console.log(`insertTodosAsTimeblocks Events:\n${JSON.stringify(logEventDetails(eArr))}\n`)
+      if (Editor.note) eraseTimeblocksWithTBTag(Editor.note, timeBlockTag)
+      insertItemsIntoNote(sortedTodos)
+    }
   } else {
     showMessage(`You need to be in Today's Calendar Note to use this function`)
   }
