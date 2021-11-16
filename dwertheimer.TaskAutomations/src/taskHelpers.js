@@ -1,6 +1,6 @@
 /* eslint-disable max-len */
 /* eslint-disable no-unused-vars */
-import { fieldSorter } from '../../helpers/general'
+import { fieldSorter } from '../../helpers/sorting'
 import { hyphenatedDateString } from './dateHelpers'
 
 const HASHTAGS = /\B#([a-zA-Z0-9]+\b)/g
@@ -34,28 +34,6 @@ function getNumericPriority(item) {
     prio = -1
   }
   return prio
-}
-
-// is value an array? if so, return its first value in lowercase for sorting
-const ia = (val) => {
-  const retVal = Array.isArray(val) ? val[0] : val
-  return typeof retVal === 'string' ? retVal.toLowerCase() : retVal
-}
-
-/*
- * @param array of task items
- * @param pass in field names to sort by -- either a single string or an array of strings/sort-order
- * @return the sorted task list
- * @description Note: priority sorting is !,!!,!!!
- */
-export function sortListBy(list, fields) {
-  const sortBy = typeof fields === 'string' ? [fields] : fields
-  list.sort(fieldSorter(sortBy))
-  // console.log('** LIST AFTER fieldSorter SORT:')
-  // console.log(JSON.stringify(list))
-
-  return list
-  // return list.sort(fieldSorterOptimized(sortBy))
 }
 
 // returns a date object if it exists, and null if there is no forward date
