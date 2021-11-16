@@ -356,7 +356,7 @@ export function getTimeBlockTimesForEvents(
 ): TimeBlocksWithMap {
   let newInfo = { timeMap, blockList: [], timeBlockTextList: [] }
   const blocksAvailable = findTimeBlocks(timeMap, config)
-  if (blocksAvailable?.length && options.mode) {
+  if (todos?.length && blocksAvailable?.length && timeMap?.length && options.mode) {
     switch (options.mode) {
       case 'priority-split': {
         // Go down priority list and split events if necessary

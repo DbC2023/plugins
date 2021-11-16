@@ -240,8 +240,9 @@ describe('timeblocking', () => {
     expect(tb.findOptimalTimeForEvent()).toEqual(true)
   })
 
-  test.skip('dwertheimer.EventAutomations - timeblocking.getTimeBlockTimesForEvents ', () => {
-    expect(tb.getTimeBlockTimesForEvents()).toEqual(true)
+  test('dwertheimer.EventAutomations - timeblocking.getTimeBlockTimesForEvents ', () => {
+    let options = { mode: 'priority-split' }
+    expect(tb.getTimeBlockTimesForEvents(timeMap, todos, config, options)).toEqual(true)
   })
 
   test('dwertheimer.EventAutomations - timeblocking.addMinutesToTimeText ', () => {
