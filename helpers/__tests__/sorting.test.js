@@ -25,8 +25,12 @@ describe('paragraphDetail', () => {
       { propB: 7 },
     ]
     const immutableOrigList = _.cloneDeep(list)
-    // sort by propA
+    // sort by propA (string, not array)
     let sorted = s.sortListBy(list, 'propA')
+    expect(sorted[0]).toEqual(immutableOrigList[1])
+    expect(sorted[2]).toEqual(immutableOrigList[2])
+    // sort by propA (array)
+    let sorted = s.sortListBy(list, ['propA'])
     expect(sorted[0]).toEqual(immutableOrigList[1])
     expect(sorted[2]).toEqual(immutableOrigList[2])
     // sort by propB

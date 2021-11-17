@@ -190,7 +190,7 @@ export async function insertTodosAsTimeblocks(useQuickTemplate: boolean = true):
   if (Editor.filename && dateStr && dateStr === date) {
     const todosParagraphs = getTodaysTodoParagraphs()
     const cleanTodayTodoParas = removeDateTagsFromArray(todosParagraphs)
-    const tasksByType = cleanTodayTodoParas.length ? getTasksByType(cleanTodayTodoParas) : null
+    const tasksByType = cleanTodayTodoParas.length ? getTasksByType(cleanTodayTodoParas) : null // puts in object by type of task and enriches with sort info (like priority)
     if (tasksByType && tasksByType['open'].length) {
       const sortedTodos = tasksByType.length ? sortListBy(tasksByType['open'], '-priority') : []
       const nowTimeString = getTimeStringFromDate(new Date())

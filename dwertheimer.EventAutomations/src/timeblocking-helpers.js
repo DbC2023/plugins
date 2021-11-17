@@ -360,7 +360,7 @@ export function getTimeBlockTimesForEvents(
     switch (options.mode) {
       case 'priority-split': {
         // Go down priority list and split events if necessary
-        const sortedTaskList = sortListBy(todos, [('-priority', 'duration')])
+        const sortedTaskList = sortListBy(todos, ['-priority', 'duration'])
         newInfo = matchTasksToSlotsWithSplits(sortedTaskList, { blockList: blocksAvailable, timeMap }, config)
         // const { timeBlockTextList, timeMap, blockList } = newInfo
 

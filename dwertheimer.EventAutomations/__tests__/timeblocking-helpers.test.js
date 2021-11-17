@@ -1,6 +1,7 @@
 /* globals describe, expect, it, test, DataStore */
 import { exportAllDeclaration } from '@babel/types'
 import { differenceInCalendarDays, endOfDay, startOfDay, eachMinuteOfInterval, formatISO9075 } from 'date-fns'
+import { getTasksByType } from '../../dwertheimer.TaskAutomations/src/taskHelpers'
 import * as tb from '../src/timeblocking-helpers'
 // import { sortListBy, getTasksByType } from '../../dwertheimer.TaskAutomations/src/taskHelpers'
 const _ = require('lodash')
@@ -13,7 +14,9 @@ const config = {
   durationMarker: "'",
   intervalMins: 5,
   removeDuration: true,
+  nowStrOverride: '00:00' /* for testing */,
 }
+import { JSP } from '../../helpers/dev'
 
 // import { isNullableTypeAnnotation } from '@babel/types'
 
@@ -241,8 +244,29 @@ describe('timeblocking', () => {
   })
 
   test('dwertheimer.EventAutomations - timeblocking.getTimeBlockTimesForEvents ', () => {
-    let options = { mode: 'priority-split' }
-    expect(tb.getTimeBlockTimesForEvents(timeMap, todos, config, options)).toEqual(true)
+    const timeMap = [
+      // one item and one contiguous block
+      { start: '00:00', busy: false, index: 0 },
+      { start: '00:15', busy: false, index: 2 },
+      { start: '00:20', busy: false, index: 3 },
+      { start: '00:25', busy: false, index: 4 },
+    ]
+    const todos = [
+      { content: "!! line1 '8m", type: 'open' },
+      { content: "! line2 '1m", type: 'open' },
+      { content: "!!! line3 '7m", type: 'open' },
+    ]
+    const todosByType = getTasksByType(todos)
+    const options = { mode: 'priority-split' }
+    const cfg = { ...config, workDayStart: '00:00', workDayEnd: '23:59', nowStrOverride: '00:00' }
+    // returns {blockList, timeBlockTextList, timeMap}
+    const res = tb.getTimeBlockTimesForEvents(timeMap, todosByType['open'], cfg, options)
+    expect(res.timeBlockTextList).toEqual([
+      '* 00:00-00:05 !!! line3 (1) #🕑',
+      '* 00:15-00:17 !!! line3 (2) #🕑',
+      '* 00:20-00:28 !! line1 #🕑',
+      /* '* 00:20-00:21 ! line2 #🕑', LINE2 DOES NOT HAVE A SLOT */
+    ])
   })
 
   test('dwertheimer.EventAutomations - timeblocking.addMinutesToTimeText ', () => {
