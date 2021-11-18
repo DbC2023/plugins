@@ -38,6 +38,7 @@ export type TimeBlockDefaults = {
   durationMarker: string,
   intervalMins: number,
   removeDuration: boolean,
+  defaultDuration: number,
   nowStrOverride?: string /* for testing */,
 }
 /**
@@ -268,6 +269,7 @@ export function addMinutesToTimeText(startTimeText: string, minutesToAdd: number
 
 export function findOptimalTimeForEvent(timeMap: IntervalMap, todo: { [string]: [mixed] }, config: TimeBlockDefaults) {
   const newMap = timeMap.map((t) => {})
+  return newMap
   // FIXME: HERE
 }
 
@@ -292,7 +294,7 @@ export function blockTimeAndCreateTimeBlockText(
 }
 
 export function matchTasksToSlotsWithSplits(
-  sortedTaskList: Array<TParagraph>,
+  sortedTaskList: Array<{ ...TParagraph, duration: number }>,
   tmb: TimeBlocksWithMap,
   config: TimeBlockDefaults,
 ): TimeBlocksWithMap {
@@ -301,7 +303,7 @@ export function matchTasksToSlotsWithSplits(
   let timeBlockTextList = []
   sortedTaskList.forEach((task) => {
     if (newBlockList && newBlockList.length) {
-      const taskDuration = getDurationFromLine(task.content, durationMarker) || 15 // default time is 15m
+      const taskDuration = task.duration || getDurationFromLine(task.content, durationMarker) || 15 // default time is 15m
       const taskTitle = removeDateTagsAndToday(task.content)
       let scheduling = true
       let schedulingCount = 0
@@ -348,6 +350,17 @@ export function matchTasksToSlotsWithSplits(
   return { timeMap: newMap, blockList: newBlockList, timeBlockTextList }
 }
 
+export const addDurationToTasks = (
+  tasks: Array<TParagraph>,
+  config: TimeBlockDefaults,
+): Array<{ ...TParagraph, duration: number }> => {
+  const dTasks = tasks.map((t) => ({
+    ...t,
+    duration: getDurationFromLine(t.content, config.durationMarker) || config.defaultDuration,
+  }))
+  return dTasks
+}
+
 export function getTimeBlockTimesForEvents(
   timeMap: IntervalMap,
   todos: Array<TParagraph>,
@@ -357,18 +370,22 @@ export function getTimeBlockTimesForEvents(
   let newInfo = { timeMap, blockList: [], timeBlockTextList: [] }
   const blocksAvailable = findTimeBlocks(timeMap, config)
   if (todos?.length && blocksAvailable?.length && timeMap?.length && options.mode) {
+    const todosWithDurations = addDurationToTasks(todos, config)
+
     switch (options.mode) {
       case 'priority-split': {
         // Go down priority list and split events if necessary
-        const sortedTaskList = sortListBy(todos, ['-priority', 'duration'])
+        const sortedTaskList = sortListBy(todosWithDurations, ['-priority', 'duration'])
         newInfo = matchTasksToSlotsWithSplits(sortedTaskList, { blockList: blocksAvailable, timeMap }, config)
         // const { timeBlockTextList, timeMap, blockList } = newInfo
 
         break
       }
       case 'place-largest-first': {
-        const sortedTaskList = sortListBy(todos, [('-duration', '-priority')])
-        const sortedBlockList = sortListBy(blocksAvailable, ['-minsAvailable'])
+        const sortedTaskList = sortListBy(todosWithDurations, ['-duration', '-priority'])
+        // const sortedBlockList = sortListBy(blocksAvailable, ['-minsAvailable']) //won't work because blocks gets recalced
+        newInfo = matchTasksToSlotsWithSplits(sortedTaskList, { blockList: blocksAvailable, timeMap }, config)
+        // FIXME: HERE AND RESULT IS NOT RIGHT
         break
       }
       default: {

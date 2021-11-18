@@ -15,6 +15,7 @@ const config = {
   intervalMins: 5,
   removeDuration: true,
   nowStrOverride: '00:00' /* for testing */,
+  defaultDuration: 10,
 }
 import { JSP } from '../../helpers/dev'
 
@@ -150,6 +151,12 @@ describe('timeblocking', () => {
     expect(tb.getDurationFromLine(" '2.5m", "'")).toEqual(3)
     expect(tb.getDurationFromLine(" '2h5m", "'")).toEqual(125)
   })
+
+  test('dwertheimer.EventAutomations - timeblocking.addDurationToTasks ', () => {
+    const res = tb.addDurationToTasks([{ content: `foo '1h4m` }], config)
+    expect(res[0].duration).toEqual(64)
+  })
+
   test('dwertheimer.EventAutomations - timeblocking.removeDateTagsFromArray ', () => {
     const inputArray = [
       { indents: 1, type: 'open', content: 'thecontent >today', rawContent: '* thecontent >today' },
@@ -239,10 +246,6 @@ describe('timeblocking', () => {
     expect(timeBlocks[1]).toEqual({ start: '00:15', end: '00:30', minsAvailable: 15 })
   })
 
-  test.skip('dwertheimer.EventAutomations - timeblocking.findOptimalTimeForEvent ', () => {
-    expect(tb.findOptimalTimeForEvent()).toEqual(true)
-  })
-
   test('dwertheimer.EventAutomations - timeblocking.getTimeBlockTimesForEvents ', () => {
     const timeMap = [
       // one item and one contiguous block
@@ -260,13 +263,24 @@ describe('timeblocking', () => {
     const options = { mode: 'priority-split' }
     const cfg = { ...config, workDayStart: '00:00', workDayEnd: '23:59', nowStrOverride: '00:00' }
     // returns {blockList, timeBlockTextList, timeMap}
-    const res = tb.getTimeBlockTimesForEvents(timeMap, todosByType['open'], cfg, options)
+    let res = tb.getTimeBlockTimesForEvents(timeMap, todosByType['open'], cfg, options)
     expect(res.timeBlockTextList).toEqual([
       '* 00:00-00:05 !!! line3 (1) #🕑',
       '* 00:15-00:17 !!! line3 (2) #🕑',
       '* 00:20-00:28 !! line1 #🕑',
       /* '* 00:20-00:21 ! line2 #🕑', LINE2 DOES NOT HAVE A SLOT */
     ])
+    // test with calling options.mode = 'place-largest-first'
+    options.mode = 'place-largest-first'
+    res = tb.getTimeBlockTimesForEvents([{ start: '00:00', busy: false, index: 0 }], todosByType['open'], cfg, options)
+    expect(res.timeBlockTextList).toEqual([
+      '* 00:00-00:05 !! line1 (1) #🕑',
+      /* '* 00:20-00:21 ! line2 #🕑', LINE2 DOES NOT HAVE A SLOT */
+    ])
+    // test with calling no options.mode (just for coverage of switch statement)
+    options.mode = ''
+    res = tb.getTimeBlockTimesForEvents(timeMap, todosByType['open'], cfg, options)
+    expect(res.timeBlockTextList).toEqual([])
   })
 
   test('dwertheimer.EventAutomations - timeblocking.addMinutesToTimeText ', () => {
@@ -371,5 +385,19 @@ describe('timeblocking', () => {
     expect(res.timeBlockTextList.length).toEqual(2)
     expect(res.timeMap.length).toEqual(0)
     expect(res.blockList.length).toEqual(0)
+    // now test line which had no time attached
+    timeBlocks = [{ start: '00:00', end: '00:20', minsAvailable: 20 }]
+    ;(timeMap = [{ start: '00:00', busy: false, index: 1 }]),
+      (res = res =
+        tb.matchTasksToSlotsWithSplits(
+          [{ content: 'line4' }],
+          { blockList: timeBlocks, timeMap: timeMap, timeBlockTextList: [] },
+          cfg,
+        ))
+    expect(res.timeBlockTextList).toEqual([`* 00:00-00:15 line4 ${config.timeBlockTag}`])
+  })
+
+  test('dwertheimer.EventAutomations - timeblocking.findOptimalTimeForEvent ', () => {
+    expect(tb.findOptimalTimeForEvent([], [], config)).toEqual([])
   })
 })

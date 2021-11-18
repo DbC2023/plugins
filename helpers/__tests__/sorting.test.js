@@ -13,6 +13,10 @@ describe('paragraphDetail', () => {
   test('dwertheimer.sorting - firstValue ', () => {
     expect(s.firstValue(['StrinG', 'foo'])).toEqual('string')
   })
+  test('dwertheimer.sorting - firstValue ', () => {
+    expect(s.firstValue(99)).toEqual(99)
+  })
+
   // indirectly testing fieldSorter which is hard to
   // test because it returns a function
   test('dwertheimer.sorting - sortListBy ', () => {

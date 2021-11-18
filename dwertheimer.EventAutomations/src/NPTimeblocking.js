@@ -61,6 +61,7 @@ export function getTimeBlockingDefaults(): TimeBlockDefaults {
     durationMarker: "'",
     intervalMins: 5,
     removeDuration: true,
+    defaultDuration: 15,
   }
   return def
 }
