@@ -1,4 +1,4 @@
-/* globals describe, expect, it, test, DataStore */
+/* globals describe, expect, it, test */
 import { exportAllDeclaration } from '@babel/types'
 import { differenceInCalendarDays, endOfDay, startOfDay, eachMinuteOfInterval, formatISO9075 } from 'date-fns'
 import { getTasksByType } from '../../dwertheimer.TaskAutomations/src/taskHelpers'
@@ -56,6 +56,7 @@ describe('timeblocking', () => {
   test('dwertheimer.EventAutomations - timeblocking.removeDateTagsAndToday ', () => {
     expect(tb.removeDateTagsAndToday(`test >today`)).toEqual('test')
     expect(tb.removeDateTagsAndToday(`test >2021-11-09`)).toEqual('test')
+    expect(tb.removeDateTagsAndToday(`test no date`)).toEqual('test no date')
   })
   test('dwertheimer.EventAutomations - timeblocking.blockTimeFor ', () => {
     const map = tb.getBlankDayMap(5)
@@ -189,6 +190,16 @@ describe('timeblocking', () => {
     expect(tb.filterTimeMapToOpenSlots(timeMap, cfg, '00:00')).toEqual(timeMap.slice(0, 1)) // workDayEnd is before 2st item
   })
 
+  test('dwertheimer.EventAutomations - timeblocking.makeAllItemsTodos ', () => {
+    const types = ['open', 'done', 'scheduled', 'cancelled', 'title', 'quote', 'list', 'text']
+    const expec = ['open', 'done', 'scheduled', 'cancelled', 'title', 'quote', 'open', 'open']
+    const paras = types.map((type) => ({ type, content: `was:${type}` }))
+    const res = tb.makeAllItemsTodos(paras)
+    res.forEach((item, i) => {
+      expect(item.type).toEqual(expec[i])
+    })
+  })
+
   test('dwertheimer.EventAutomations - timeblocking.calculateSlotDifferenceInMins ', () => {
     let cfg = { ...config, intervalMins: 2 }
     expect(tb.calculateSlotDifferenceInMins({ start: '00:00', end: '00:10' }, cfg, false).minsAvailable).toEqual(10)
@@ -208,6 +219,8 @@ describe('timeblocking', () => {
 
   test('dwertheimer.EventAutomations - timeblocking.makeDateFromTimeString ', () => {
     expect(tb.makeDateFromTimeString('2021-01-01', '00:00').toISOString()).toEqual('2021-01-01T08:00:00.000Z')
+    //bad date
+    expect(tb.makeDateFromTimeString('foo', '00:00')).toEqual(null)
   })
 
   test('dwertheimer.EventAutomations - timeblocking.findTimeBlocks ', () => {
@@ -260,10 +273,15 @@ describe('timeblocking', () => {
       { content: "!!! line3 '7m", type: 'open' },
     ]
     const todosByType = getTasksByType(todos)
-    const options = { mode: 'priority-split' }
-    const cfg = { ...config, workDayStart: '00:00', workDayEnd: '23:59', nowStrOverride: '00:00' }
+    const cfg = {
+      ...config,
+      workDayStart: '00:00',
+      workDayEnd: '23:59',
+      nowStrOverride: '00:00',
+      mode: 'priority-split',
+    }
     // returns {blockList, timeBlockTextList, timeMap}
-    let res = tb.getTimeBlockTimesForEvents(timeMap, todosByType['open'], cfg, options)
+    let res = tb.getTimeBlockTimesForEvents(timeMap, todosByType['open'], cfg)
     expect(res.timeBlockTextList).toEqual([
       '* 00:00-00:05 !!! line3 (1) #🕑',
       '* 00:15-00:17 !!! line3 (2) #🕑',
@@ -271,15 +289,15 @@ describe('timeblocking', () => {
       /* '* 00:20-00:21 ! line2 #🕑', LINE2 DOES NOT HAVE A SLOT */
     ])
     // test with calling options.mode = 'place-largest-first'
-    options.mode = 'place-largest-first'
-    res = tb.getTimeBlockTimesForEvents([{ start: '00:00', busy: false, index: 0 }], todosByType['open'], cfg, options)
+    cfg.mode = 'place-largest-first'
+    res = tb.getTimeBlockTimesForEvents([{ start: '00:00', busy: false, index: 0 }], todosByType['open'], cfg)
     expect(res.timeBlockTextList).toEqual([
       '* 00:00-00:05 !! line1 (1) #🕑',
       /* '* 00:20-00:21 ! line2 #🕑', LINE2 DOES NOT HAVE A SLOT */
     ])
     // test with calling no options.mode (just for coverage of switch statement)
-    options.mode = ''
-    res = tb.getTimeBlockTimesForEvents(timeMap, todosByType['open'], cfg, options)
+    cfg.mode = ''
+    res = tb.getTimeBlockTimesForEvents(timeMap, todosByType['open'], cfg)
     expect(res.timeBlockTextList).toEqual([])
   })
 

@@ -6,7 +6,8 @@
 import { chooseOption, showMessageYesNo } from '../../helpers/userInput'
 import { default as sweepNote, type ReturnStatus } from '../../nmn.sweep/src/sweepNote'
 import { getTagParamsFromString } from '../../helpers/general'
-import { getTasksByType, sortListBy, TASK_TYPES } from './taskHelpers'
+import { sortListBy } from '../../helpers/sorting'
+import { getTasksByType, TASK_TYPES } from './taskHelpers'
 
 // Note: not currently using getOverdueTasks from taskHelpers (because if it's open, we are moving it)
 // But the functions exist to look for open items with a date that is less than today

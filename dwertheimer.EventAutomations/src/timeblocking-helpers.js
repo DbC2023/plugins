@@ -40,6 +40,7 @@ export type TimeBlockDefaults = {
   removeDuration: boolean,
   defaultDuration: number,
   nowStrOverride?: string /* for testing */,
+  mode: string,
 }
 /**
  * Create a map of the time intervals for the day
@@ -145,6 +146,24 @@ export function blockOutEvents(
   return newTimeMap
 }
 
+/**
+ * Typically we are looking for open tasks, but it is possible that some >today items
+ * might be bullets (type=='list'), so for timeblocking purposes, let's make them open tasks
+ * for the purposes of this script
+ * @param {TParagraphs[]} paras
+ * @returns TParagraphs[] - with remapped items
+ */
+export function makeAllItemsTodos(paras: Array<TParagraph>): Array<TParagraph> {
+  const typesToRemap = ['list', 'text']
+  // NOTEPLAN FRUSTRATION! YOU CANNOT SPREAD THE ...P AND GET THE
+  // UNDERLYING VALUES!
+  // return paras.map((p) => {p.type = ({ ...p, type: typesToRemap.indexOf(p.type) !== -1 ? 'open' : p.type }))
+  return paras.map((p) => {
+    p.type = typesToRemap.indexOf(p.type) !== -1 ? 'open' : p.type
+    return p
+  })
+}
+
 // $FlowIgnore - can't find a Flow type for RegExp
 export const durationRegEx = (durationMarker: string) =>
   new RegExp(`\\s*${durationMarker}(([0-9]+\\.?[0-9]*|\\.[0-9]+)h)*(([0-9]+\\.?[0-9]*|\\.[0-9]+)m)*`, 'mg')
@@ -210,8 +229,14 @@ export function filterTimeMapToOpenSlots(timeMap: IntervalMap, config: TimeBlock
  * @param {string} timeString - in form "HH:MM" e.g. "08:20"
  * @returns
  */
-export const makeDateFromTimeString = (dateString: string, timeString: string): Date => {
-  return new Date(`${dateString} ${timeString}:00`)
+export const makeDateFromTimeString = (dateString: string, timeString: string): Date | null => {
+  const dateStr = `${dateString}T${timeString}:00`
+  const date = new Date(dateStr)
+  if (date.toString() === 'Invalid Date') {
+    console.log(`makeDateFromTimeString - new Date("${dateStr}") returns an Invalid Date`)
+    return null
+  }
+  return new Date(dateStr)
 }
 
 export function calculateSlotDifferenceInMins(
@@ -239,7 +264,7 @@ export function calculateSlotDifferenceInMins(
  */
 export function findTimeBlocks(timeMap: IntervalMap, config: TimeBlockDefaults): BlockArray {
   const blocks: Array<OpenBlock> = []
-  if (timeMap.length) {
+  if (timeMap?.length) {
     let lastSlot = timeMap[0]
     let blockStart = timeMap[0]
     for (let i = 1; i < timeMap.length; i++) {
@@ -256,8 +281,11 @@ export function findTimeBlocks(timeMap: IntervalMap, config: TimeBlockDefaults):
     }
     if (timeMap.length && lastSlot === timeMap[timeMap.length - 1]) {
       // pick up the last straggler edge case
-      blocks.push(calculateSlotDifferenceInMins({ start: blockStart.start, end: lastSlot.start }, config, true))
+      const lastBlock = calculateSlotDifferenceInMins({ start: blockStart.start, end: lastSlot.start }, config, true)
+      blocks.push(lastBlock)
     }
+  } else {
+    console.log(`findTimeBlocks: timeMap array was empty`)
   }
   return blocks
 }
@@ -354,10 +382,10 @@ export const addDurationToTasks = (
   tasks: Array<TParagraph>,
   config: TimeBlockDefaults,
 ): Array<{ ...TParagraph, duration: number }> => {
-  const dTasks = tasks.map((t) => ({
-    ...t,
-    duration: getDurationFromLine(t.content, config.durationMarker) || config.defaultDuration,
-  }))
+  const dTasks = tasks.map((t) => {
+    t.duration = getDurationFromLine(t.content, config.durationMarker) || config.defaultDuration
+    return t
+  })
   return dTasks
 }
 
@@ -365,20 +393,17 @@ export function getTimeBlockTimesForEvents(
   timeMap: IntervalMap,
   todos: Array<TParagraph>,
   config: TimeBlockDefaults,
-  options: BlockTimeOptions = { mode: 'priority-split' },
 ): TimeBlocksWithMap {
   let newInfo = { timeMap, blockList: [], timeBlockTextList: [] }
   const blocksAvailable = findTimeBlocks(timeMap, config)
-  if (todos?.length && blocksAvailable?.length && timeMap?.length && options.mode) {
+  if (todos?.length && blocksAvailable?.length && timeMap?.length && config.mode) {
     const todosWithDurations = addDurationToTasks(todos, config)
-
-    switch (options.mode) {
+    switch (config.mode) {
       case 'priority-split': {
         // Go down priority list and split events if necessary
         const sortedTaskList = sortListBy(todosWithDurations, ['-priority', 'duration'])
         newInfo = matchTasksToSlotsWithSplits(sortedTaskList, { blockList: blocksAvailable, timeMap }, config)
         // const { timeBlockTextList, timeMap, blockList } = newInfo
-
         break
       }
       case 'place-largest-first': {
@@ -389,9 +414,14 @@ export function getTimeBlockTimesForEvents(
         break
       }
       default: {
+        console.log('ERROR: Unknown getTimeBlockTimesForEvents mode')
         break
       }
     }
+  } else {
+    console.log(
+      `INFO: getTimeBlockTimesForEvents nothing will be entered because todos.length=${todos.length} blocksAvailable.length=${blocksAvailable.length} timeMap.length=${timeMap.length} config.mode=${config.mode}`,
+    )
   }
   return newInfo
 }

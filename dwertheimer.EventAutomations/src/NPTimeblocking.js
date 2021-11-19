@@ -32,8 +32,9 @@ import {
   blockOutEvents,
   removeDateTagsFromArray,
   getTimeBlockTimesForEvents,
+  makeAllItemsTodos,
   type IntervalMap,
-  type getTimeBlockingDefaults,
+  type TimeBlockDefaults,
 } from './timeblocking-helpers'
 
 /* TCalendarItem is a type for the calendar items:
@@ -59,12 +60,15 @@ export function getTimeBlockingDefaults(): TimeBlockDefaults {
     workDayStart: '08:00',
     workDayEnd: '18:00',
     durationMarker: "'",
-    intervalMins: 5,
+    intervalMins: 15 /* minimum block size */,
     removeDuration: true,
     defaultDuration: 15,
+    mode: 'priority-split',
   }
   return def
 }
+
+const editorOrNote = (note) => (Editor.filename === note?.filename || !note ? Editor : note)
 
 // This is just for debug
 function logEventDetails(input) {
@@ -75,18 +79,20 @@ function logEventDetails(input) {
 }
 
 async function insertContentUnderHeading(destNote: TNote, headingToFind: string, parasAsText: string) {
-  const destNoteParas = destNote.paragraphs
   let insertionIndex = 1 // top of note by default
   //   console.log(`insertionIndex:${insertionIndex}`)
-  for (let i = 0; i < destNoteParas.length; i++) {
-    const p = destNoteParas[i]
+  for (let i = 0; i < destNote.paragraphs.length; i++) {
+    const p = destNote.paragraphs[i]
     if (p.content.trim() === headingToFind && p.type === 'title') {
       insertionIndex = i + 1
       break
     }
   }
-  //   console.log(`  Inserting at index ${insertionIndex}`)
-  await destNote.insertParagraph(parasAsText, insertionIndex, 'empty')
+  // console.log(
+  //   `NPTimeblocking::insertContentUnderHeading: Inserting at index ${insertionIndex} this content:\n${parasAsText}`,
+  // )
+  // const where = Editor.filename === destNote.filename ? Editor : destNote
+  await editorOrNote(destNote).insertParagraph(parasAsText, insertionIndex, 'text')
 }
 
 async function eraseTimeblocksWithTBTag(destNote: TNote, timeBlockTag) {
@@ -95,13 +101,13 @@ async function eraseTimeblocksWithTBTag(destNote: TNote, timeBlockTag) {
   for (let i = 0; i < destNoteParas.length; i++) {
     const p = destNoteParas[i]
     if (new RegExp(timeBlockTag, 'g').test(p.content)) {
-      parasToDelete.push(p[i])
+      parasToDelete.push(p)
     }
   }
   // console.log(`parasToDelete:${parasToDelete.length}`)
   if (parasToDelete.length > 0) {
     // console.log(JSP(parasToDelete, 2))
-    // destNote.removeParagraphs(parasToDelete) //This line crashes the app
+    destNote.removeParagraphs(parasToDelete) //This line crashes the app
   }
 }
 
@@ -117,7 +123,6 @@ function keepTodayPortionOnly(input): Array<TCalendarItem> {
       const todayWasStart = differenceInCalendarDays(event.date, today) === 0
       const todayWasEnd = !event.endDate ? true : differenceInCalendarDays(event.endDate, today) === 0
       //   console.log(`${event.title} todayWasStart:${todayWasStart} todayWasEnd:${todayWasEnd} start:${event.date}`)
-      // TODO: confirm edge cases of this
       if (todayWasStart) {
         eventCopy.endDate = endOfDay(event.date)
       }
@@ -141,7 +146,7 @@ function keepTodayPortionOnly(input): Array<TCalendarItem> {
  * Backlinks format: {"type":"note","content":"_Testing scheduled sweeping","rawContent":"_Testing scheduled sweeping","prefix":"","lineIndex":0,"heading":"","headingLevel":0,"isRecurring":0,"indents":0,"filename":"zDELETEME/Test scheduled.md","noteType":"Notes","linkedNoteTitles":[],"subItems":[{},{},{},{}]}
  * backlinks[0].subItems[0] =JSLog: {"type":"open","content":"scheduled for 10/4 using app >today","rawContent":"* scheduled for 10/4 using app >today","prefix":"* ","contentRange":{},"lineIndex":2,"date":"2021-11-07T07:00:00.000Z","heading":"_Testing scheduled sweeping","headingRange":{},"headingLevel":1,"isRecurring":0,"indents":0,"filename":"zDELETEME/Test scheduled.md","noteType":"Notes","linkedNoteTitles":[],"subItems":[]}
  */
-function getTodaysTodoParagraphs(pNote: TNote | null = null): Array<TParagraph> {
+function getTodaysReferences(pNote: TNote | null = null): Array<TParagraph> {
   const note = pNote || Editor.note
   if (note) {
     const backlinks = [...(note.backlinks || {})] // an array of notes which link to this note
@@ -162,51 +167,53 @@ function getTodaysTodoParagraphs(pNote: TNote | null = null): Array<TParagraph> 
   }
 }
 
-function insertItemsIntoNote(sortedTodos, taskChar, timeBlockTag) {
-  sortedTodos.forEach((todo) => {
-    const line = createTimeBlockLine(todo.content, '08:00', '10:00', taskChar, timeBlockTag)
-    if (Editor.note) {
-      insertContentUnderHeading(Editor.note, 'Time Blocks', line)
-    } else {
-      console.log(`insertItemsIntoNote: There was no Editor note`)
-    }
-  })
+async function insertItemsIntoNote(note, list, config) {
+  const { timeBlockHeading } = config
+  if (list && list.length > 0 && note) {
+    // $FlowIgnore
+    await insertContentUnderHeading(note, timeBlockHeading, list.join('\n'))
+  } else {
+    await showMessage('No >today items to schedule')
+  }
 }
 
-async function getPopulatedTimeMapForToday(dateStr: string, intervalMins: number): Promise<IntervalMap> {
+async function getPopulatedTimeMapForToday(
+  dateStr: string,
+  intervalMins: number,
+  config: TimeBlockDefaults,
+): Promise<IntervalMap> {
   // const todayEvents = await Calendar.eventsToday()
   const eventsArray: Array<TCalendarItem> = await getEventsForDay(dateStr)
   const eventsWithStartAndEnd = getTimedEntries(eventsArray)
   const eventsScheduledForToday = keepTodayPortionOnly(eventsWithStartAndEnd)
   const blankDayMap = getBlankDayMap(parseInt(intervalMins))
-  const eventMap = blockOutEvents(eventsScheduledForToday, blankDayMap)
+  const eventMap = blockOutEvents(eventsScheduledForToday, blankDayMap, config)
   return eventMap
 }
 
-export async function insertTodosAsTimeblocks(useQuickTemplate: boolean = true): Promise<void> {
+export async function insertTodosAsTimeblocks(note: TNote = null, useQuickTemplate: boolean = true): Promise<void> {
   const date = getTodaysDateUnhyphenated()
   const dateStr = Editor.filename ? dateStringFromCalendarFilename(Editor.filename) : null
-  const { timeBlockTag, todoChar, workDayStart, workDayEnd, timeBlockHeading, durationMarker, intervalMins } =
-    getTimeBlockingDefaults()
-  if (Editor.filename && dateStr && dateStr === date) {
-    const todosParagraphs = getTodaysTodoParagraphs()
+  const config = getTimeBlockingDefaults()
+  const { timeBlockTag, todoChar, workDayStart, workDayEnd, timeBlockHeading, durationMarker, intervalMins } = config
+  if (dateStr && dateStr === date) {
+    const backlinkParas = getTodaysReferences()
+    const todosParagraphs = makeAllItemsTodos(backlinkParas)
     const cleanTodayTodoParas = removeDateTagsFromArray(todosParagraphs)
     const tasksByType = cleanTodayTodoParas.length ? getTasksByType(cleanTodayTodoParas) : null // puts in object by type of task and enriches with sort info (like priority)
     if (tasksByType && tasksByType['open'].length) {
-      const sortedTodos = tasksByType.length ? sortListBy(tasksByType['open'], '-priority') : []
+      const sortedTodos = tasksByType['open'].length ? sortListBy(tasksByType['open'], '-priority') : []
       const nowTimeString = getTimeStringFromDate(new Date())
-      const calendarMapWithEvents = await getPopulatedTimeMapForToday(dateStr, intervalMins)
-      const eventsToTimeblock = getTimeBlockTimesForEvents(
-        calendarMapWithEvents,
-        sortedTodos,
-        nowTimeString,
-        workDayStart,
-        workDayEnd,
-      )
-      if (Editor.note) eraseTimeblocksWithTBTag(Editor.note, timeBlockTag)
-      insertItemsIntoNote(sortedTodos)
+      const calendarMapWithEvents = await getPopulatedTimeMapForToday(dateStr, intervalMins, config)
+      // calendarMapWithEvents.forEach((todo, i) => console.log(`calendarMapWithEvents[${i}]=${JSP(todo, 2)}`))
+      // sortedTodos.forEach((todo, i) => console.log(`sortedTodos[${i}]=${JSP(todo, 2)}`))
+      const eventsToTimeblock = getTimeBlockTimesForEvents(calendarMapWithEvents, sortedTodos, config)
+      const { timeBlockTextList } = eventsToTimeblock
+      // $FlowIgnore
+      eraseTimeblocksWithTBTag(editorOrNote(note), timeBlockTag)
+      await insertItemsIntoNote(editorOrNote(note), timeBlockTextList, config)
     }
   } else {
-    showMessage(`You need to be in Today's Calendar Note to use this function`)
+    await showMessage(`You need to be in Today's Calendar Note to use this function`)
   }
 }
