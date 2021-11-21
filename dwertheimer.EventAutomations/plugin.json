@@ -1,10 +1,10 @@
 {
   "COMMENT1": "Note If you are not going to use the `npm run autowatch` command to compile, then delete the macOS.minVersion line below",
   "macOS.minVersion": "10.13.0",
-  "noteplan.minAppVersion": "3.0.21", 
+  "noteplan.minAppVersion": "3.3", 
   "plugin.id": "dwertheimer.EventAutomations",
-  "plugin.name": "🧩 Event Automations",
-  "plugin.description": "Create a note from an event on your calendar!",
+  "plugin.name": "🗓 Event Automations",
+  "plugin.description": "Create a note from an event on your calendar or create timeblocks for items marked for today!",
   "plugin.author": "dwertheimer",
   "plugin.version": "0.1.1",
   "plugin.dependencies": [],
@@ -24,10 +24,10 @@
       "alias": ["calNote","calendar note","meeting note"]
     },
     {
-      "name": "Insert Todos As Timeblocks",
+      "name": "Create Timeblocks for >today's Tasks",
       "description": "Read >today todos and insert them into today's calendar note as timeblocks",
       "jsFunction": "insertTodosAsTimeblocks",
-      "alias": ["timeblocks","block","todoblocks"]
+      "alias": ["tbt","timeblocks","block","todoblocks"]
     }
   ]
 }

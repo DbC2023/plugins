@@ -1,5 +1,8 @@
 // @flow
 
+//TODO:
+// - add a scan of the current note for >today or >2020-01-01 todays
+
 import {
   differenceInCalendarDays,
   endOfDay,
@@ -99,7 +102,6 @@ export function attachTimeblockTag(content: string, timeblockTag: string): strin
 
 export function createTimeBlockLine(blockData: BlockData, config: TimeBlockDefaults): string {
   if (blockData.title && blockData.title.length > 0) {
-    //FIXME: what is this newContentLine and whaaaaaaat?
     let newContentLine = blockData.title
     if (config.removeDuration) {
       newContentLine = removeDurationParameter(newContentLine, config.durationMarker)
@@ -122,13 +124,21 @@ export function getTimedEntries(input: Array<TCalendarItem>): Array<TCalendarIte
 
 /**
  * Return the time as a string in the format "HH:MM"
- * @param {*} date
+ * @param {Date} date object
  * @returns {string} - the time string in the format "HH:MM"
  */
 export function getTimeStringFromDate(date: Date): string {
   return formatISO9075(date).split(' ')[1].slice(0, -3)
 }
 
+/**
+ * Takes in an array of calendar items and a timeMap for the day
+ * and returns the timeMap with the busy times updated to reflect the calendar items
+ * @param {Array<TCalendarItem>} events
+ * @param {IntervalMap} timeMap
+ * @param {TimeBlockDefaults} config
+ * @returns {IntervalMap} - the timeMap with the busy times updated to reflect the calendar items
+ */
 export function blockOutEvents(
   events: Array<TCalendarItem>,
   timeMap: IntervalMap,
@@ -207,12 +217,10 @@ export function removeDateTagsFromArray(paragraphsArray: Array<TParagraph>): Arr
 }
 
 /**
- * @description Get the day map with only the slots that are open
+ * @description Get the day map with only the slots that are open, after now and inside of the workday
  * @param {*} timeMap
- * @param {*} nowStr
- * @param {*} workDayStart
- * @param {*} workDayEnd
- * @returns
+ * @param {*} config
+ * @returns {IntervalMap} remaining time map
  */
 export function filterTimeMapToOpenSlots(timeMap: IntervalMap, config: TimeBlockDefaults): IntervalMap {
   const nowStr = config.nowStrOverride ?? getTimeStringFromDate(new Date())
@@ -243,10 +251,11 @@ export function calculateSlotDifferenceInMins(
   block: BlockData,
   config: TimeBlockDefaults,
   includeLastSlotTime: boolean = true,
-): OpenBlock {
-  const startTime = makeDateFromTimeString('2021-01-01', block.start)
-  let endTime = makeDateFromTimeString('2021-01-01', block.end)
-  endTime = includeLastSlotTime ? addMinutes(endTime, config.intervalMins) : endTime
+): OpenBlock | null {
+  const startTime = makeDateFromTimeString('2021-01-01', block.start || '00:00')
+  let endTime = makeDateFromTimeString('2021-01-01', block.end || '23:59')
+  endTime = endTime ? (includeLastSlotTime ? addMinutes(endTime, config.intervalMins) : endTime) : null
+  if (!startTime || !endTime) return null
   return {
     start: getTimeStringFromDate(startTime),
     end: getTimeStringFromDate(endTime),
@@ -326,12 +335,14 @@ export function matchTasksToSlotsWithSplits(
   tmb: TimeBlocksWithMap,
   config: TimeBlockDefaults,
 ): TimeBlocksWithMap {
-  let { timeMap: newMap, blockList: newBlockList } = tmb
+  const { timeMap, blockList: incomingBlockList } = tmb
+  let newMap = filterTimeMapToOpenSlots(timeMap, config)
+  let newBlockList = findTimeBlocks(newMap, config)
   const { durationMarker } = config
   let timeBlockTextList = []
   sortedTaskList.forEach((task) => {
     if (newBlockList && newBlockList.length) {
-      const taskDuration = task.duration || getDurationFromLine(task.content, durationMarker) || 15 // default time is 15m
+      const taskDuration = task.duration || getDurationFromLine(task.content, durationMarker) || config.defaultDuration // default time is 15m
       const taskTitle = removeDateTagsAndToday(task.content)
       let scheduling = true
       let schedulingCount = 0
@@ -362,7 +373,7 @@ export function matchTasksToSlotsWithSplits(
               blockData,
               config,
             )
-            // Re-assign newMap, newBlockList, and timeBlockTextList for next run
+            // Re-assign newMap, newBlockList, and timeBlockTextList for next loop run
             ;({ timeMap: newMap, blockList: newBlockList, timeBlockTextList } = newTimeBlockWithMap)
             if (newBlockList && newBlockList.length) {
               block = newBlockList[0]
@@ -395,21 +406,30 @@ export function getTimeBlockTimesForEvents(
   config: TimeBlockDefaults,
 ): TimeBlocksWithMap {
   let newInfo = { timeMap, blockList: [], timeBlockTextList: [] }
-  const blocksAvailable = findTimeBlocks(timeMap, config)
+  const availableTimes = filterTimeMapToOpenSlots(timeMap, config)
+  const blocksAvailable = findTimeBlocks(availableTimes, config)
   if (todos?.length && blocksAvailable?.length && timeMap?.length && config.mode) {
     const todosWithDurations = addDurationToTasks(todos, config)
     switch (config.mode) {
       case 'priority-split': {
         // Go down priority list and split events if necessary
         const sortedTaskList = sortListBy(todosWithDurations, ['-priority', 'duration'])
-        newInfo = matchTasksToSlotsWithSplits(sortedTaskList, { blockList: blocksAvailable, timeMap }, config)
+        newInfo = matchTasksToSlotsWithSplits(
+          sortedTaskList,
+          { blockList: blocksAvailable, timeMap: availableTimes },
+          config,
+        )
         // const { timeBlockTextList, timeMap, blockList } = newInfo
         break
       }
       case 'place-largest-first': {
         const sortedTaskList = sortListBy(todosWithDurations, ['-duration', '-priority'])
         // const sortedBlockList = sortListBy(blocksAvailable, ['-minsAvailable']) //won't work because blocks gets recalced
-        newInfo = matchTasksToSlotsWithSplits(sortedTaskList, { blockList: blocksAvailable, timeMap }, config)
+        newInfo = matchTasksToSlotsWithSplits(
+          sortedTaskList,
+          { blockList: blocksAvailable, timeMap: availableTimes },
+          config,
+        )
         // FIXME: HERE AND RESULT IS NOT RIGHT
         break
       }

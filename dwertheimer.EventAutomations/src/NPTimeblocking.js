@@ -95,12 +95,12 @@ async function insertContentUnderHeading(destNote: TNote, headingToFind: string,
   await editorOrNote(destNote).insertParagraph(parasAsText, insertionIndex, 'text')
 }
 
-async function eraseTimeblocksWithTBTag(destNote: TNote, timeBlockTag) {
+export async function deleteParagraphsContainingString(destNote: TNote, timeBlockTag) {
   const destNoteParas = destNote.paragraphs
   const parasToDelete = []
   for (let i = 0; i < destNoteParas.length; i++) {
     const p = destNoteParas[i]
-    if (new RegExp(timeBlockTag, 'g').test(p.content)) {
+    if (new RegExp(timeBlockTag, 'gm').test(p.content)) {
       parasToDelete.push(p)
     }
   }
@@ -192,13 +192,13 @@ async function getPopulatedTimeMapForToday(
 }
 
 export async function insertTodosAsTimeblocks(note: TNote = null, useQuickTemplate: boolean = true): Promise<void> {
+  const config = getTimeBlockingDefaults()
   const date = getTodaysDateUnhyphenated()
   const dateStr = Editor.filename ? dateStringFromCalendarFilename(Editor.filename) : null
-  const config = getTimeBlockingDefaults()
-  const { timeBlockTag, todoChar, workDayStart, workDayEnd, timeBlockHeading, durationMarker, intervalMins } = config
+  const { timeBlockTag, intervalMins } = config
   if (dateStr && dateStr === date) {
     const backlinkParas = getTodaysReferences()
-    const todosParagraphs = makeAllItemsTodos(backlinkParas)
+    const todosParagraphs = makeAllItemsTodos(backlinkParas) //some items may not be todos but we want to pretend they are and timeblock for them
     const cleanTodayTodoParas = removeDateTagsFromArray(todosParagraphs)
     const tasksByType = cleanTodayTodoParas.length ? getTasksByType(cleanTodayTodoParas) : null // puts in object by type of task and enriches with sort info (like priority)
     if (tasksByType && tasksByType['open'].length) {
@@ -209,8 +209,8 @@ export async function insertTodosAsTimeblocks(note: TNote = null, useQuickTempla
       // sortedTodos.forEach((todo, i) => console.log(`sortedTodos[${i}]=${JSP(todo, 2)}`))
       const eventsToTimeblock = getTimeBlockTimesForEvents(calendarMapWithEvents, sortedTodos, config)
       const { timeBlockTextList } = eventsToTimeblock
-      // $FlowIgnore
-      eraseTimeblocksWithTBTag(editorOrNote(note), timeBlockTag)
+      // $FlowIgnore -- Delete any previous timeblocks we created
+      deleteParagraphsContainingString(editorOrNote(note), timeBlockTag)
       await insertItemsIntoNote(editorOrNote(note), timeBlockTextList, config)
     }
   } else {
