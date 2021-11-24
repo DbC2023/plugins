@@ -381,13 +381,6 @@ describe(`${PLUGIN_NAME}`, () => {
       expect(tb.addMinutesToTimeText('00:50', 20)).toEqual('01:10')
     })
 
-    // test.skip('isTimeBlockLine ', () => {
-    //   expect(tb.isTimeBlockLine('10:00-11:00')).toEqual(true)
-    //   expect(tb.isTimeBlockLine('10:00')).toEqual(true)
-    //   expect(tb.isTimeBlockLine('at 10:00')).toEqual(true)
-    //   expect(tb.isTimeBlockLine('at 2pm')).toEqual(true)
-    // })
-
     test('blockTimeAndCreateTimeBlockText ', () => {
       let timeMap = [
         { start: '00:00', busy: false, index: 0 },
@@ -506,6 +499,112 @@ describe(`${PLUGIN_NAME}`, () => {
     })
     test('findOptimalTimeForEvent ', () => {
       expect(tb.findOptimalTimeForEvent([], [], config)).toEqual([])
+    })
+  })
+
+  describe('isTimeBlockLine ', () => {
+    test('should return false if no timeblock', () => {
+      expect(tb.isTimeBlockLine('01. no timeblock here :')).toEqual(false)
+    })
+    describe('RE_TIMEBLOCK_TYPE1 ', () => {
+      test('should work with single time (no range) and no AM or PM', () => {
+        expect(tb.isTimeBlockLine('12:30')).toEqual(true)
+      })
+      test('should work with range and no AM or PM', () => {
+        expect(tb.isTimeBlockLine('12:30-14:45')).toEqual(true)
+      })
+      test('should work with single digits', () => {
+        expect(tb.isTimeBlockLine('1:30')).toEqual(true)
+      })
+      test('should work with single digits', () => {
+        expect(tb.isTimeBlockLine('1:38')).toEqual(true)
+      })
+      test('should not work with single digit mins', () => {
+        expect(tb.isTimeBlockLine('1:8')).toEqual(false)
+      })
+      test('should work for 12:30AM-2:45pm (duration and caps)', () => {
+        expect(tb.isTimeBlockLine('12:30AM-2:45pm')).toEqual(true)
+      })
+      test('should work for 12:30AM by itself', () => {
+        expect(tb.isTimeBlockLine('12:30AM')).toEqual(true)
+      })
+    })
+    describe('RE_TIMEBLOCK_TYPE2 ', () => {
+      test('should work with at, like at 2AM', () => {
+        expect(tb.isTimeBlockLine('at 4:30AM')).toEqual(true)
+      })
+      test('should work with just a number, like "at 2"', () => {
+        expect(tb.isTimeBlockLine('at 4')).toEqual(true)
+      })
+      test('should work with just a number and a range, like "at 2-3"', () => {
+        expect(tb.isTimeBlockLine('at 2-3')).toEqual(true)
+      })
+      test('should work with just a number and a range, like "at 2-3pm"', () => {
+        expect(tb.isTimeBlockLine('at 2-3pm')).toEqual(true)
+      })
+    })
+    describe('RE_TIMEBLOCK_TYPE3 ', () => {
+      test('should work with at and mins on the ending time, like "at 9-11:30"', () => {
+        expect(tb.isTimeBlockLine('at 9-11:30')).toEqual(true)
+      })
+    })
+  })
+  describe('findLongestStringInArray ', () => {
+    test('should return longest string in array', () => {
+      expect(tb.findLongestStringInArray(['a', 'bb', 'ccc', 'dddd'])).toEqual('dddd')
+    })
+    test('should return longest string in array wherever it is in array', () => {
+      expect(tb.findLongestStringInArray(['aa', 'bbbbb', 'ccc', 'cc'])).toEqual('bbbbb')
+    })
+    test('should return empty string if no array', () => {
+      expect(tb.findLongestStringInArray([])).toEqual('')
+    })
+  })
+  describe('getTimeBlockString ', () => {
+    test('should return null if no timeblock', () => {
+      expect(tb.getTimeBlockString('01. no timeblock here :')).toEqual('')
+    })
+    describe('RE_TIMEBLOCK_TYPE1 ', () => {
+      test('should work with single time (no range) and no AM or PM', () => {
+        expect(tb.getTimeBlockString('12:30')).toEqual('12:30')
+      })
+      test('should work with range and no AM or PM', () => {
+        expect(tb.getTimeBlockString('12:30-14:45')).toEqual('12:30-14:45')
+      })
+      test('should work with single digits', () => {
+        expect(tb.getTimeBlockString('1:30')).toEqual('1:30')
+      })
+      test('should work with single digits', () => {
+        expect(tb.getTimeBlockString('1:38')).toEqual('1:38')
+      })
+      test('should not work with single digit mins', () => {
+        expect(tb.getTimeBlockString('1:8')).toEqual('')
+      })
+      test('should work for 12:30AM-2:45pm (duration and caps)', () => {
+        expect(tb.getTimeBlockString('12:30AM-2:45pm')).toEqual('12:30AM-2:45pm')
+      })
+      test('should work for 12:30AM by itself', () => {
+        expect(tb.getTimeBlockString('12:30AM')).toEqual('12:30AM')
+      })
+    })
+    describe('RE_TIMEBLOCK_TYPE2 ', () => {
+      test('should work with at, like at 4:30AM', () => {
+        expect(tb.getTimeBlockString('at 4:30AM')).toEqual('at 4:30AM')
+      })
+      test('should work with just a number, like "at 2"', () => {
+        expect(tb.getTimeBlockString('at 4')).toEqual('at 4')
+      })
+      test('should work with just a number and a range, like "at 2-3"', () => {
+        expect(tb.getTimeBlockString('at 2-3')).toEqual('at 2-3')
+      })
+      test('should work with just a number and a range, like "at 2-3pm"', () => {
+        expect(tb.getTimeBlockString('at 2-3pm')).toEqual('at 2-3pm')
+      })
+    })
+    describe('RE_TIMEBLOCK_TYPE3 ', () => {
+      test('should work with at and mins on the ending time, like "at 9-11:30"', () => {
+        expect(tb.getTimeBlockString('at 9-11:30')).toEqual('at 9-11:30')
+      })
     })
   })
 })
