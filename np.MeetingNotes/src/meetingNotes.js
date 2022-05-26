@@ -1,63 +1,61 @@
 // @flow
-// If you're not up for Flow typechecking (it's quite an undertaking), delete the line above
-// Plugin code goes in files like this. Can be one per command, or several in a file.
-// export default async function [name of the function called by Noteplan]
-// Type checking reference: https://flow.org/
-// Specific how-to re: Noteplan: https://github.com/NotePlan/plugins/blob/main/Flow_Guide.md
 
-import helloWorldUtils from './support/hello-world'
-import NPTemplating from 'NPTemplating'
 import moment from 'moment-business-days'
 import fm from 'front-matter'
 
-import { log } from '@helpers/dev'
+import { log, logError } from '@helpers/dev'
 import pluginJson from '../plugin.json'
 
-export async function insertNoteTemplate(origFileName, dailyNoteDate): Promise<void> {
-  log(pluginJson, 'chooseTemplateIfNeeded')
-  const templateFilename = await chooseTemplateIfNeeded(origFileName, false)
-  
-  log(pluginJson, 'get content of template for rendering')
-  const templateContent = DataStore.projectNoteByFilename(templateFilename)?.content
+export async function insertNoteTemplate(origFileName: string, dailyNoteDate): Promise<void> {
+  try {
+    // log(pluginJson, 'chooseTemplateIfNeeded')
+    const templateFilename = await chooseTemplateIfNeeded(origFileName, false)
 
-  if(!templateContent) {
-    log(pluginJson, 'couldnt load content of template "' + templateFilename + '", try NPTemplating method')
-    templateContent = await NPTemplating.getTemplate(templateFilename)
-    return
-  }
+    // log(pluginJson, 'get content of template for rendering')
+    let templateContent = DataStore.projectNoteByFilename(templateFilename)?.content
 
-  log(pluginJson, 'preRender template')
-  const { frontmatterBody, frontmatterAttributes } = await NPTemplating.preRender(templateContent)
+    if (!templateContent) {
+      log(pluginJson, 'couldnt load content of template "' + templateFilename + '", try NPTemplating method')
+      templateContent = await DataStore.invokePluginCommandByName('getTemplate', 'np.Templating', [templateFilename])
 
-  log(pluginJson, 'render template')
-  const result = await NPTemplating.render(frontmatterBody, frontmatterAttributes)
+      return
+    }
 
-  if(dailyNoteDate) {
-    log(pluginJson, 'apply rendered template to daily note with date ' + dailyNoteDate)
-    let note = DataStore.calendarNoteByDate(dailyNoteDate)
-    note.content = result
-  } else {
-    log(pluginJson, 'apply rendered template to the current editor')
-    Editor.content = result
+    // log(pluginJson, 'preRender template')
+    const { frontmatterBody, frontmatterAttributes } = await DataStore.invokePluginCommandByName('preRender', 'np.Templating', [templateContent])
+
+    // log(pluginJson, 'render template')
+    const result = await DataStore.invokePluginCommandByName('render', 'np.Templating', [frontmatterBody, frontmatterAttributes])
+
+    if (dailyNoteDate) {
+      // log(pluginJson, 'apply rendered template to daily note with date ' + dailyNoteDate)
+      let note = DataStore.calendarNoteByDate(dailyNoteDate)
+      note.content = result
+    } else {
+      // log(pluginJson, 'apply rendered template to the current editor')
+      Editor.content = result
+    }
+  } catch (error) {
+    logError(pluginJson, error)
   }
 }
 
 export async function newMeetingNote(selectedEvent, templateFilename: string): Promise<void> {
-  log(pluginJson, 'chooseTemplateIfNeeded')
+  // log(pluginJson, 'chooseTemplateIfNeeded')
   templateFilename = await chooseTemplateIfNeeded(templateFilename, true)
 
-  log(pluginJson, 'chooseEventIfNeeded')
+  // log(pluginJson, 'chooseEventIfNeeded')
   selectedEvent = await chooseEventIfNeeded(selectedEvent)
 
   try {
-    log(pluginJson, 'generateTemplateData')
+    // log(pluginJson, 'generateTemplateData')
     let templateData = generateTemplateData(selectedEvent)
 
-    log(pluginJson, 'get template content')
+    // log(pluginJson, 'get template content')
     let templateContent = DataStore.projectNoteByFilename(templateFilename).content
 
-    log(pluginJson, 'preRender template')
-    const { frontmatterBody, frontmatterAttributes } = await NPTemplating.preRender(templateContent, templateData)
+    // log(pluginJson, 'preRender template')
+    const { frontmatterBody, frontmatterAttributes } = await DataStore.invokePluginCommandByName('preRender', 'np.Templating', [templateContent, templateData])
 
     let attrs = frontmatterAttributes
     let folder = attrs?.folder || ''
@@ -65,27 +63,26 @@ export async function newMeetingNote(selectedEvent, templateFilename: string): P
     let prepend = attrs?.prepend || ''
     let newNoteTitle = attrs?.newNoteTitle || ''
 
-    log(pluginJson, 'render template')
-    let result = await NPTemplating.render(frontmatterBody, frontmatterAttributes)
+    // log(pluginJson, 'render template')
+    let result = await DataStore.invokePluginCommandByName('render', 'np.Templating', [frontmatterBody, frontmatterAttributes])
 
     if (newNoteTitle.length > 0) {
       result = '# ' + newNoteTitle + '\n' + result
     }
 
     let newTitle = null
-    if(append || prepend) {
-      log(pluginJson, 'append/prepend template')
+    if (append || prepend) {
+      // log(pluginJson, 'append/prepend template')
       newTitle = await appendPrependNewNote(append, prepend, folder, result)
     } else {
-      log(pluginJson, 'create a new note with the rendered template')
+      // log(pluginJson, 'create a new note with the rendered template')
       newTitle = await newNoteWithFolder(result, folder, newNoteTitle)
     }
 
-    log(pluginJson, 'write the note-link into the event')
+    // log(pluginJson, 'write the note-link into the event')
     writeNoteLinkIntoEvent(selectedEvent, newTitle)
-
   } catch (error) {
-    log(pluginJson, 'error in newMeetingNote: ' + error)
+    logError(pluginJson, 'error in newMeetingNote: ' + error)
   }
 }
 
@@ -94,11 +91,11 @@ function writeNoteLinkIntoEvent(selectedEvent, newTitle) {
     // Only add the link to events without attendees
     log(pluginJson, 'writing event link into event notes.')
 
-    if(newTitle && selectedEvent.attendees.length == 0 && selectedEvent.isCalendarWritable) {
-      let noteLink = "noteplan://x-callback-url/openNote?noteTitle=" + encodeURIComponent(newTitle)
+    if (newTitle && selectedEvent.attendees.length == 0 && selectedEvent.isCalendarWritable) {
+      let noteLink = 'noteplan://x-callback-url/openNote?noteTitle=' + encodeURIComponent(newTitle)
       let eventNotes = selectedEvent.notes
-      if(eventNotes.length > 0) {
-        noteLink = "\n" + noteLink
+      if (eventNotes.length > 0) {
+        noteLink = '\n' + noteLink
       }
 
       selectedEvent.notes = eventNotes + noteLink
@@ -109,7 +106,7 @@ function writeNoteLinkIntoEvent(selectedEvent, newTitle) {
       log(pluginJson, 'note link not written to event because it contains attendees (' + selectedEvent.attendees.length + ') or calendar doesnt allow content changes.')
     }
   } catch (error) {
-    log(pluginJson, 'error in writeNoteLinkIntoEvent: ' + error)
+    logError(pluginJson, 'error in writeNoteLinkIntoEvent: ' + error)
   }
 }
 
@@ -178,12 +175,12 @@ async function appendPrependNewNote(append, prepend, folder, content) {
 
     let originalContentLength = note.content.length
 
-    if(append) {
+    if (append) {
       log(pluginJson, 'append the template')
-      note.appendParagraph(content, "text")
-    } else if(prepend) {
+      note.appendParagraph(content, 'text')
+    } else if (prepend) {
       log(pluginJson, 'prepend the template')
-      note.prependParagraph(content, "text")
+      note.prependParagraph(content, 'text')
     }
 
     log(pluginJson, 'open the note')
@@ -196,9 +193,8 @@ async function appendPrependNewNote(append, prepend, folder, content) {
     }
 
     return note.title
-
   } catch (error) {
-    log(pluginJson, 'error in appendPrependNewNote: ' + error)
+    logError(pluginJson, 'error in appendPrependNewNote: ' + error)
   }
 }
 
@@ -209,7 +205,6 @@ async function newNoteWithFolder(content, folder) {
       let folders = DataStore.folders
       let selection = await CommandBar.showOptions(folders, 'Select a folder')
       folder = folders[selection.index]
-
     } else if (folder == '<current>') {
       log(pluginJson, 'find the current folder of the opened note')
       let currentFilename = ''
@@ -237,11 +232,12 @@ async function newNoteWithFolder(content, folder) {
 
     log(pluginJson, 'find the note and return the title')
     let note = DataStore.projectNoteByFilename(filename)
-    if(note) { return note.title }
+    if (note) {
+      return note.title
+    }
     return null
-
   } catch (error) {
-    log(pluginJson, 'error in newNoteWithFolder: ' + error)
+    logError(pluginJson, 'error in newNoteWithFolder: ' + error)
   }
 }
 
@@ -268,7 +264,7 @@ async function chooseTemplateIfNeeded(templateFilename, onlyMeetingNotes) {
 
     return templateFilename
   } catch (error) {
-    log(pluginJson, 'error in chooseTemplateIfNeeded: ' + error)
+    logError(pluginJson, 'error in chooseTemplateIfNeeded: ' + error)
   }
 }
 
@@ -301,7 +297,7 @@ async function chooseEventIfNeeded(selectedEvent) {
 
     return selectedEvent
   } catch (error) {
-    log(pluginJson, 'error in chooseEventIfNeeded: ' + error)
+    logError(pluginJson, 'error in chooseEventIfNeeded: ' + error)
   }
 }
 
