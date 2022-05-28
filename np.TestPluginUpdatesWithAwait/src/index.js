@@ -33,25 +33,40 @@ export async function entryPoint(): Promise<void> {
   log(pluginJson, `Inside plugin call entrypoint: Here after message prompt await`)
 }
 
+/**
+ * Runs every time the plugin starts up (any command in this plugin is run)
+ * Generally, you should not need to do anything here, because it blocks the plugin command from starting up
+ * the command-specific entrypoints (e.g. sayHello in the helloWorld.js file is where you'll do your work)
+ */
 export async function init(): Promise<void> {
-  // this runs every time the plugin starts up (any command in this plugin is run)
-  // normally, you don't need to do anything here
-  // the command-specific entrypoints (e.g. sayHello in the helloWorld.js file is where you'll do your work)
   log(pluginJson, `Inside init function for Plugin: "${pluginJson['plugin.name']}"`)
   log(pluginJson, `Inside init function Version is: "${pluginJson['plugin.version']}"`)
   const startTime = new Date()
   try {
-    DataStore.installOrUpdatePluginsByID([pluginJson['plugin.id']], true, false)?.then((results) => {
-      if (Array.isArray(results) && results.length > 0) {
-        results.array.forEach((result) => {
-          const callFunction = result.code >= 0 ? log : logError
-          callFunction(pluginJson, `Init: Plugin "${result.pluginId}": ${result.message} `)
-        })
-      }
-    })
+    // Check for the latest version of the plugin, and if a minor update is available, install it and show a message
+    DataStore.installOrUpdatePluginsByID([pluginJson['plugin.id']], true, false)
+      ?.then((result) =>
+        log(
+          pluginJson,
+          `Init: installOrUpdatePluginsByID for "${pluginJson['plugin.id']}" returned (non-blocking) in ${timer(
+            startTime,
+          )}`,
+        ),
+      )
+      .catch((error) =>
+        logError(
+          pluginJson,
+          `Init: installOrUpdatePluginsByID for "${pluginJson['plugin.id']}" returned: "${error}" in ${timer(
+            startTime,
+          )}`,
+        ),
+      )
   } catch (error) {
-    logError(pluginJson, `Error installing or updating plugin: ${pluginJson['plugin.name']}`)
-    clo(error, 'Error installing or updating plugin:')
+    logError(
+      pluginJson,
+      `Init try/catch: Error installing or updating plugin: ${pluginJson['plugin.name']} in ${timer(startTime)}`,
+    )
+    clo(error, 'Init: Error installing or updating plugin:')
   }
 }
 
