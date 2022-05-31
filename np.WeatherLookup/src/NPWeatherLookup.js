@@ -1,7 +1,7 @@
 // @flow
 
 import * as utils from './support/weather-utils'
-import { log, logError, clo, JSP } from '../../helpers/dev'
+import { log, logError, clo, JSP, guarantee } from '../../helpers/dev'
 import { createRunPluginCallbackUrl } from '../../helpers/general'
 import pluginJson from '../plugin.json'
 
@@ -65,9 +65,13 @@ export async function getLatLongListForName(name: string, params: WeatherParams)
   const url = `https://api.openweathermap.org/geo/1.0/direct?q=${name}&appid=${params.appid}`
   log(`weather-utils::getLatLongForName`, `url: ${url}`)
   try {
-    const response = await fetch(url)
+    // const response = await fetch(url)
+    const { ok, data, error } = await guarantee(fetch(url, { timeout: 3000 }))
+    if (ok) {
+      return JSON.parse(response)
+    } else {
+    }
     clo(response, `weather-utils::getLatLongForName response`)
-    return JSON.parse(response)
   } catch (error) {
     logError(`weather-utils::getLatLongForName`, `error: ${JSP(error)}`)
     return []
