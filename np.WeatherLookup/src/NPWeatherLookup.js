@@ -62,7 +62,7 @@ export async function insertWeatherCallbackURL() {
 }
 
 export async function getLatLongListForName(name: string, params: WeatherParams): Promise<Array<{}>> {
-  const url = `https://api.openweathermap.org/geo/1.0/direct?q=${name}&appid=${params.appid}`
+  const url = `http://api.openweathermap.org/geo/1.0/direct?q=${name}&appid=${params.appid}`
   log(`weather-utils::getLatLongForName`, `url: ${url}`)
   try {
     // const response = await fetch(url)
@@ -70,6 +70,7 @@ export async function getLatLongListForName(name: string, params: WeatherParams)
     if (ok) {
       return JSON.parse(response)
     } else {
+      logError(pluginJson, `Error fetching weather data: ${JSP(error)}`)
     }
     clo(response, `weather-utils::getLatLongForName response`)
   } catch (error) {
