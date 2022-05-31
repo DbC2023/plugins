@@ -1,9 +1,15 @@
 // @flow
 
-import utils from './support/utils'
+import * as utils from './support/weather-utils'
 import { log, logError, clo, JSP } from '../../helpers/dev'
 import { createRunPluginCallbackUrl } from '../../helpers/general'
 import pluginJson from '../plugin.json'
+
+type WeatherParams = {
+  appid: string,
+  lat: ?string,
+  lon: ?string,
+}
 
 export async function insertWeatherByLocation(incoming: ?string = ''): Promise<void> {
   // every command/plugin entry point should always be wrapped in a try/catch block
@@ -26,10 +32,10 @@ export async function insertWeatherByLocation(incoming: ?string = ''): Promise<v
       )
     }
 
-    // a call to a support function in a separate file
-    const message = utils.uppercase('Hello World from Test Plugin!')
-
-    log(pluginJson, `The plugin says: ${message}`)
+    const params: WeatherParams = {
+      appid: weatherAPIKey,
+    }
+    const result = await getLatLongListForName('London', params)
 
     if (!incoming?.length) {
       // Create a XCallback URL that can run this command
@@ -53,4 +59,17 @@ export async function insertWeatherCallbackURL() {
   Editor.insertTextAtCursor(
     `This link could be used anywhere inside or outside of NotePlan to call this plugin:\n${url}\nGo ahead and click it! ^^^\nYou will see the results below:\n\n*****\n`,
   )
+}
+
+export async function getLatLongListForName(name: string, params: WeatherParams): Promise<Array<{}>> {
+  const url = `https://api.openweathermap.org/geo/1.0/direct?q=${name}&appid=${params.appid}`
+  log(`weather-utils::getLatLongForName`, `url: ${url}`)
+  try {
+    const response = await fetch(url)
+    clo(response, `weather-utils::getLatLongForName response`)
+    return JSON.parse(response)
+  } catch (error) {
+    logError(`weather-utils::getLatLongForName`, `error: ${JSP(error)}`)
+    return []
+  }
 }
