@@ -1,0 +1,50 @@
+{
+  "COMMENT": "Details on these fields: https://help.noteplan.co/article/67-create-command-bar-plugins",
+  "macOS.minVersion": "10.13.0",
+  "noteplan.minAppVersion": "3.4.0",
+  "plugin.id": "np.WeatherLookup",
+  "plugin.name": "🌤 Weather Lookup by Location",
+  "plugin.version": "0.1.0",
+  "plugin.description": "Look up weather by location (lat/long or by name) - requires OpenWeather API key",
+  "plugin.author": "dwertheimer",
+  "plugin.dependencies": [],
+  "plugin.script": "script.js",
+  "plugin.url": "https://github.com/NotePlan/plugins/blob/main/dwertheimer.WeatherLookup/README.md",
+  "plugin.commands": [
+    {
+      "name": "Weather by Location Name",
+      "description": "Prompt for location; Insert at cursor",
+      "jsFunction": "insertWeatherByLocation",
+      "alias": [
+        "insertweather",
+        "location"
+      ]
+    },
+    {
+      "name": "Get weather XCallbackURL",
+      "description": "Insert weatherCallbackURL at cursor",
+      "jsFunction": "insertWeatherCallbackURL",
+      "alias": [
+      ]
+    }
+  ],
+  "plugin.settings": [
+    {
+      "COMMENT": "Plugin settings documentation: https://help.noteplan.co/article/123-plugin-configuration",
+      "type": "heading",
+      "title": "Weather Lookup by Location Settings"
+    },
+    {
+      "title": "OpenWeather API Key",
+      "key": "weatherAPIKey",
+      "type": "string",
+      "description": "This plugin requires a (free) API key for OpenWeatherMap (the weather lookup service). Get an API key here: https://home.openweathermap.org/users/sign_up",
+      "default": ""
+    },
+    {
+      "key": "version",
+      "type": "hidden",
+      "description": "Weather Lookup by Location Settings Version"
+    }
+  ]
+}
