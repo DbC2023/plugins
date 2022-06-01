@@ -22,5 +22,7 @@ describe('np.WeatherLookup' /* pluginID */, () => {
         expect(result).toEqual(true)
       })
     })
+    //TODO: add test for getWeatherURLLatLong
+    //TODO: add test for extractDailyForecastData
   })
 })

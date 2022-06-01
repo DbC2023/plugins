@@ -12,6 +12,16 @@
   "plugin.url": "https://github.com/NotePlan/plugins/blob/main/dwertheimer.WeatherLookup/README.md",
   "plugin.commands": [
     {
+      "COMMENT": "DO NOT PASTE COMMAND ABOVE THIS; IT WILL BREAK THE PLUGIN; WE ARE RELYING ON [0] ORDER",
+      "name": "Weather by Lat/Long",
+      "description": "Get weather by latitude and longitude",
+      "jsFunction": "weatherByLatLong",
+      "hidden": true,
+      "alias": [
+        "latlong"
+      ]
+    },
+    {
       "name": "Weather by Location Name",
       "description": "Prompt for location; Insert at cursor",
       "jsFunction": "insertWeatherByLocation",
@@ -36,10 +46,18 @@
     },
     {
       "title": "OpenWeather API Key",
-      "key": "weatherAPIKey",
+      "key": "appid",
       "type": "string",
       "description": "This plugin requires a (free) API key for OpenWeatherMap (the weather lookup service). Get an API key here: https://home.openweathermap.org/users/sign_up",
       "default": ""
+    },
+    {
+      "title": "Temperature Units",
+      "key": "units",
+      "type": "string",
+      "choices": ["metric", "imperial"],
+      "description": "What format to display temperatures in. Metric is C°, Imperial is F°",
+      "default": "imperial"
     },
     {
       "key": "version",

@@ -14,11 +14,13 @@
 // including so rollup will trigger build when plugin.json is modified
 
 import pluginJson from '../plugin.json'
+import { isWeatherKeyValid } from '../src/support/weather-utils'
+import { showMessage } from '@helpers/userInput'
 
 // updateSettingsData will execute whenever your plugin is installed or updated
 import { updateSettingData } from '@helpers/NPconfiguration'
 
-export { insertWeatherByLocation, insertWeatherCallbackURL } from './NPWeatherLookup' // this makes the command function available to NotePlan (see plugin.json for details)
+export { insertWeatherByLocation, insertWeatherCallbackURL, weatherByLatLong } from './NPWeatherLookup' // this makes the command function available to NotePlan (see plugin.json for details)
 
 export async function onUpdateOrInstall(): Promise<void> {
   // this runs after the plugin is installed or updated. the following command updates the plugin's settings data
@@ -33,4 +35,11 @@ export async function init(): Promise<void> {
 
 export async function onSettingsUpdated(): Promise<void> {
   // you probably won't need to use this...it's fired when the settings are updated in the Preferences panel
+  if (!isWeatherKeyValid(DataStore.settings.appid)) {
+    const key = await showMessage(
+      'Invalid Weather API Key! Please enter a valid Weather API Key in settings',
+      'OK',
+      'Invalid Weather API Key',
+    )
+  }
 }
