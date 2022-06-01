@@ -16,7 +16,7 @@ export const extractDailyForecastData = (weather: { [string]: any }) => {
       let icon = getWeatherIcon(description)
       let { min, max } = temp
       let { day, night } = feels_like //day/night = feels like
-      const date = new Date(dy.dt * 1000).toDateString()
+      const date = new Date(dy.dt * 1000).toDateString().split(' ')[0]
       const itemsToRound = ['min', 'max', 'day', 'night', 'uvi']
       const returnVal = {
         sunrise,
