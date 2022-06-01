@@ -1,8 +1,9 @@
 // @flow
 
 import * as utils from './support/weather-utils'
-import { log, logError, clo, JSP, guarantee } from '../../helpers/dev'
+import { log, logError, clo, JSP } from '../../helpers/dev'
 import { createRunPluginCallbackUrl } from '../../helpers/general'
+import { chooseOption } from '@helpers/userInput'
 import pluginJson from '../plugin.json'
 
 type WeatherParams = {
@@ -35,7 +36,27 @@ export async function insertWeatherByLocation(incoming: ?string = ''): Promise<v
     const params: WeatherParams = {
       appid: weatherAPIKey,
     }
-    const result = await getLatLongListForName('London', params)
+    const results = await getLatLongListForName('London', params)
+    if (results && results.length > 0) {
+      log(pluginJson, `Results: ${results?.length}`)
+      const options = results.map((r, i) => ({
+        lat: r.lat,
+        lon: r.lon,
+        name: r.name,
+        country: r.country,
+        state: r.state,
+        label: `${r.name}, ${r.state}, ${r.country}`,
+        value: i,
+      }))
+      clo(options, 'options')
+      let chosenIndex = 0
+      if (options.length > 1) {
+        // ask user which one they wanted
+        chosenIndex = await chooseOption(`Which of these is the correct one?`, options, 0)
+      }
+      const location = options[chosenIndex]
+      clo(location, `chosen location:`)
+    }
 
     if (!incoming?.length) {
       // Create a XCallback URL that can run this command
@@ -62,17 +83,13 @@ export async function insertWeatherCallbackURL() {
 }
 
 export async function getLatLongListForName(name: string, params: WeatherParams): Promise<Array<{}>> {
-  const url = `http://api.openweathermap.org/geo/1.0/direct?q=${name}&appid=${params.appid}`
+  const url = `https://api.openweathermap.org/geo/1.0/direct?q=${name}&appid=${params.appid}&limit=5`
   log(`weather-utils::getLatLongForName`, `url: ${url}`)
   try {
-    // const response = await fetch(url)
-    const { ok, data, error } = await guarantee(fetch(url, { timeout: 3000 }))
-    if (ok) {
+    const response = await fetch(url, { timeout: 3000 })
+    if (response) {
       return JSON.parse(response)
-    } else {
-      logError(pluginJson, `Error fetching weather data: ${JSP(error)}`)
     }
-    clo(response, `weather-utils::getLatLongForName response`)
   } catch (error) {
     logError(`weather-utils::getLatLongForName`, `error: ${JSP(error)}`)
     return []
