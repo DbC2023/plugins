@@ -36,6 +36,13 @@
       "jsFunction": "insertWeatherCallbackURL",
       "alias": [
       ]
+    },
+    {
+      "name": "Weather: Set My Default Location",
+      "description": "Look up my lat/lon and set as default for weather lookup",
+      "jsFunction": "setDefaultLocation",
+      "alias": [
+      ]
     }
   ],
   "plugin.settings": [
@@ -63,6 +70,34 @@
       "key": "version",
       "type": "hidden",
       "description": "Weather Lookup by Location Settings Version"
+    },
+    {
+      "type": "separator"
+    },
+    {
+      "type": "heading",
+      "title": "My Default Location"
+    },
+    {
+      "key": "locationName",
+      "type": "string",
+      "title": "Location Name",
+      "default": "",
+      "description": "Default Location Name -- You can type it in, or use the 'Weather: Set My Default Location' command to prompt for a location and set this automatically"
+    },
+    {
+      "key": "lat",
+      "type": "string",
+      "title": "Latitude",
+      "default": "",
+      "description": "Default Location Latitude -- You can type it in, or use the 'Weather: Set My Default Location' command to prompt for a location and set this automatically"
+    },
+    {
+      "key": "lon",
+      "type": "string",
+      "title": "Longitude",
+      "default": "",
+      "description": "Default Location Longitude -- You can type it in, or use the 'Weather: Set My Default Location' command to prompt for a location and set this automatically"
     }
   ]
 }

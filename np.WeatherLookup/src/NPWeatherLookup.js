@@ -38,14 +38,12 @@ async function getLatLongForLocation(searchLocationStr: string = ''): Promise<Lo
         label: `${r.name}, ${r.state}, ${r.country}`,
         value: i,
       }))
-      clo(options, 'options')
       let chosenIndex = 0
       if (options.length > 1) {
         // ask user which one they wanted
         chosenIndex = await chooseOption(`Which of these?`, options, 0)
       }
       const location = options[chosenIndex]
-      clo(location, `chosen location:`)
       return location
     } else {
       await showMessage(`No results found for "${searchLocationStr}"`)
@@ -64,7 +62,9 @@ async function getLatLongForLocation(searchLocationStr: string = ''): Promise<Lo
  * @returns {Promise<Array<{}>} - array of potential locations
  */
 export async function getLatLongListForName(name: string, params: WeatherParams): Promise<Array<{ [string]: any }>> {
-  const url = `https://api.openweathermap.org/geo/1.0/direct?q=${name}&appid=${params.appid}&limit=5`
+  const url = `https://api.openweathermap.org/geo/1.0/direct?q=${encodeURIComponent(name)}&appid=${
+    params.appid
+  }&limit=5`
   log(`weather-utils::getLatLongForName`, `url: ${url}`)
   try {
     const response = await fetch(url, { timeout: 3000 })
@@ -77,12 +77,27 @@ export async function getLatLongListForName(name: string, params: WeatherParams)
   return []
 }
 
-function validateWeatherParams(params: WeatherParams): boolean {
-  if (!params.appid || !utils.isWeatherKeyValid(params.appid)) {
+/**
+ * Check for valid weather params (appid specifically)
+ * @param {object} params
+ * @returns {boolean}
+ */
+async function validateWeatherParams(params: WeatherParams): Promise<boolean> {
+  if (!params?.appid || !utils.isWeatherKeyValid(params.appid)) {
     logError(pluginJson, `Missing appid`)
+    await showMessage(
+      `Invalid Weather API Key! Please enter a valid Weather API Key in settings`,
+      `OK`,
+      `Invalid Weather API Key`,
+    )
     return false
   }
   return true
+}
+
+function getConfigErrorText(): string {
+  logError(pluginJson, 'You must set a weather lookup key in the settings')
+  return `This plugin requires a (free) API key for OpenWeatherMap (the weather lookup service). Get an API key here: https://home.openweathermap.org/users/sign_up and then open up this plugin's settings in the control panel and paste the API key.`
 }
 
 /**
@@ -98,7 +113,6 @@ async function getWeatherForLocation(location: LocationOption, params: WeatherPa
     const res = await fetch(url, { timeout: 3000 })
     if (res) {
       let weather = JSON.parse(res)
-      clo(weather, `weather:`)
       return weather
     }
   } catch (error) {
@@ -119,29 +133,38 @@ async function getWeatherForLocation(location: LocationOption, params: WeatherPa
  */
 export async function insertWeatherCallbackURL(incoming: string = ''): Promise<string> {
   try {
-    let locationString = incoming
-    if (!locationString?.length)
-      locationString = await CommandBar.textPrompt('Weather Lookup', 'Enter a location name to lookup weather for:', '')
-    log(pluginJson, `insertWeatherCallbackURL: locationString: ${locationString}`)
-    if (locationString?.length) {
-      const location = await getLatLongForLocation(locationString)
-      if (location) {
-        let text = ''
-        if (locationString.length) {
-          text = createPrettyRunPluginLink(
-            `${locationString} weather`,
-            pluginJson['plugin.id'],
-            pluginJson['plugin.commands'][0].name,
-            [JSON.stringify(location), 'yes'],
-          )
-        } else {
-          logError(pluginJson, `insertWeatherCallbackURL: No location to look for: "${locationString}"`)
-        }
-        if (incoming.length) {
-          // this must have come from a template call
-          return text
-        } else {
-          Editor.insertTextAtCursor(text)
+    if (!(await validateWeatherParams(DataStore.settings))) {
+      Editor.insertTextAtCursor(getConfigErrorText())
+      return ''
+    } else {
+      let locationString = incoming
+      if (!locationString?.length)
+        locationString = await CommandBar.textPrompt(
+          'Weather Lookup',
+          'Enter a location name to lookup weather for:',
+          '',
+        )
+      if (locationString && locationString?.length) {
+        log(pluginJson, `insertWeatherCallbackURL: locationString: ${String(locationString)}`)
+        const location = await getLatLongForLocation(locationString)
+        if (location) {
+          let text = ''
+          if (locationString.length) {
+            text = createPrettyRunPluginLink(
+              `${locationString} weather`,
+              pluginJson['plugin.id'],
+              pluginJson['plugin.commands'][0].name,
+              [JSON.stringify(location), 'yes'],
+            )
+          } else {
+            logError(pluginJson, `insertWeatherCallbackURL: No location to look for: "${locationString}"`)
+          }
+          if (incoming.length) {
+            // this must have come from a template call
+            return text
+          } else {
+            Editor.insertTextAtCursor(text)
+          }
         }
       }
     }
@@ -157,16 +180,11 @@ export async function insertWeatherCallbackURL(incoming: string = ''): Promise<s
  * @param {*} incoming
  * @returns
  */
-export async function insertWeatherByLocation(incoming: ?string = ''): Promise<void> {
+export async function insertWeatherByLocation(incoming: ?string = '', returnLocation: boolean = true): Promise<void> {
   // every command/plugin entry point should always be wrapped in a try/catch block
   try {
-    const { appid } = DataStore.settings // appid is the Weather API key
-    if (!appid || appid.length === 0) {
-      logError('You must set a weather lookup key in the settings')
-      Editor.appendParagraph(
-        "This plugin requires a (free) API key for OpenWeatherMap (the weather lookup service). Get an API key here: https://home.openweathermap.org/users/sign_up and then open up this plugin's settings in the control panel and paste the API key.",
-        'text',
-      )
+    if (!(await validateWeatherParams(DataStore.settings))) {
+      Editor.insertTextAtCursor(getConfigErrorText())
       return
     } else {
       let location = incoming
@@ -175,11 +193,13 @@ export async function insertWeatherByLocation(incoming: ?string = ''): Promise<v
       }
       if (location) {
         const result = await getLatLongForLocation(location)
+        return result
       }
     }
   } catch (error) {
     logError(pluginJson, JSP(error))
   }
+  return null
 }
 
 /**
@@ -191,34 +211,64 @@ export async function insertWeatherByLocation(incoming: ?string = ''): Promise<v
 export async function weatherByLatLong(incoming: string = '', showPopup: string = 'no'): Promise<string> {
   log(pluginJson, `weatherByLatLong: incoming: ${incoming} showPopup: ${showPopup}`)
   try {
-    if (incoming?.length) {
-      const location = JSON.parse(incoming)
-      let text = ''
-      let dfd = []
-      if (location.lat && location.lon) {
-        log(pluginJson, `weatherByLatLong: have lat/lon for ${location.label}`)
-        const weather = await getWeatherForLocation(location, DataStore.settings)
-        dfd = utils.extractDailyForecastData(weather)
-        if (dfd && dfd.length) {
-          dfd.forEach((w, i) => {
-            dfd[i].label = utils.getWeatherDescLine(w)
-            dfd[i].value = i
-          })
-        }
-        clo(dfd, `dfd:`)
-      }
-      if (showPopup && showPopup == 'yes') {
-        await chooseOption(`Forecast for ${location.label}`, dfd, 0)
-        // Editor.insertTextAtCursor(text)
-      } else {
-        text = dfd.map((w) => w.label).join('\n')
-        return text
-      }
+    if (!(await validateWeatherParams(DataStore.settings))) {
+      getConfigErrorText()
+      return ''
     } else {
-      logError(pluginJson, `weatherByLatLong: No location to look for; param was: "${incoming}"`)
+      if (incoming?.length) {
+        const location = JSON.parse(incoming)
+        let text = ''
+        let dfd = []
+        if (location.lat && location.lon) {
+          log(pluginJson, `weatherByLatLong: have lat/lon for ${location.label}`)
+          const weather = await getWeatherForLocation(location, DataStore.settings)
+          dfd = utils.extractDailyForecastData(weather)
+          if (dfd && dfd.length) {
+            dfd.forEach((w, i) => {
+              dfd[i].label = utils.getWeatherDescLine(w)
+              dfd[i].value = i
+            })
+          }
+        }
+        if (showPopup && showPopup == 'yes') {
+          await chooseOption(`Forecast for ${location.label}`, dfd, 0)
+          // Editor.insertTextAtCursor(text)
+        } else {
+          text = dfd.map((w) => w.label).join('\n')
+          return text
+        }
+      } else {
+        logError(pluginJson, `weatherByLatLong: No location to look for; param was: "${incoming}"`)
+      }
     }
   } catch (error) {
     logError(pluginJson, JSP(error))
   }
   return ''
+}
+
+/**
+ * Get lat/lon details for your default location
+ * @param {string} incoming
+ */
+export async function setDefaultLocation(incoming: string = ''): Promise<void> {
+  try {
+    if (!(await validateWeatherParams(DataStore.settings))) {
+      getConfigErrorText()
+    } else {
+      const location = await insertWeatherByLocation('', true)
+      if (location) {
+        clo(location, `setDefaultLocation: location: ${location}`)
+        DataStore.settings = {
+          ...DataStore.settings,
+          lat: String(location.lat),
+          lon: String(location.lon),
+          locationName: location.label,
+        }
+        await showMessage(`Default location set to:\n${location.label}`)
+      }
+    }
+  } catch (error) {
+    logError(pluginJson, JSP(error))
+  }
 }
