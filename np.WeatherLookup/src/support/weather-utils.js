@@ -1,8 +1,3 @@
-/*
-https://openweathermap.org/api URLs:
-https://api.openweathermap.org/data/3.0/onecall?lat={lat}&lon={lon}&exclude={part}&appid={API key}
-http://api.openweathermap.org/geo/1.0/direct?q={city name},{state code},{country code}&limit={limit}&appid={API key}
-*/
 import { log, logError, clo, JSP, timer } from '@helpers/dev'
 
 export const isWeatherKeyValid = (key) => key !== null && /[a-f0-9]{32}/.test(key)
@@ -17,7 +12,8 @@ export const extractDailyForecastData = (weather: { [string]: any }) => {
     dailyForecast = weather.daily.map((dy) => {
       const { sunrise, sunset, temp, uvi, humidity, feels_like } = dy
       const weather = dy.weather[0]
-      const { description, main, icon } = weather
+      const { description, main } = weather
+      const icon = getWeatherIcon(description)
       const { min, max } = temp
       const { day, night } = feels_like //day/night = feels like
       return { sunrise, sunset, temp, uvi, humidity, feels_like, description, main, icon, min, max, day, night }
@@ -26,4 +22,31 @@ export const extractDailyForecastData = (weather: { [string]: any }) => {
     logError(pluginJson, `extractDailyForecastData: No weather data to extract for ${JSP(weather)}`)
   }
   return dailyForecast
+}
+
+export const getWeatherIcon = (description) => {
+  const weatherDescText = [
+    'showers',
+    'rain',
+    'sunny intervals',
+    'partly sunny',
+    'sunny',
+    'clear sky',
+    'cloud',
+    'snow ',
+    'thunderstorm',
+    'tornado',
+  ]
+  const weatherDescIcons = ['🌦️', '🌧️', '🌤', '⛅', '☀️', '☀️', '☁️', '🌨️', '⛈', '🌪']
+  let weatherIcon = ''
+  for (let i = 0; i < weatherDescText.length; i++) {
+    if (description.match(weatherDescText[i])) {
+      weatherIcon = weatherDescIcons[i]
+      break
+    }
+  }
+  if (weatherIcon === '') {
+    logError(pluginJson, `****** getWeatherIcon: No weather icon found for ${description}`)
+  }
+  return weatherIcon
 }
