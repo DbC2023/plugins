@@ -10,14 +10,34 @@ export const extractDailyForecastData = (weather: { [string]: any }) => {
   let dailyForecast = []
   if (weather && weather.daily?.length > 0) {
     dailyForecast = weather.daily.map((dy) => {
-      const { sunrise, sunset, temp, uvi, humidity, feels_like } = dy
-      const weather = dy.weather[0]
-      const { description, main } = weather
-      const icon = getWeatherIcon(description)
-      const { min, max } = temp
-      const { day, night } = feels_like //day/night = feels like
+      let { sunrise, sunset, temp, uvi, humidity, feels_like } = dy
+      let weather = dy.weather[0]
+      let { description, main } = weather
+      let icon = getWeatherIcon(description)
+      let { min, max } = temp
+      let { day, night } = feels_like //day/night = feels like
       const date = new Date(dy.dt * 1000).toDateString()
-      return { sunrise, sunset, temp, uvi, humidity, feels_like, description, main, icon, min, max, day, night, date }
+      const itemsToRound = ['min', 'max', 'day', 'night', 'uvi']
+      const returnVal = {
+        sunrise,
+        sunset,
+        temp,
+        uvi,
+        humidity,
+        feels_like,
+        description,
+        main,
+        icon,
+        min,
+        max,
+        day,
+        night,
+        date,
+      }
+      itemsToRound.forEach((item) => {
+        returnVal[item] = Math.floor(returnVal[item])
+      })
+      return returnVal
     })
   } else {
     logError(pluginJson, `extractDailyForecastData: No weather data to extract for ${JSP(weather)}`)
@@ -56,5 +76,5 @@ export const getWeatherDescLine = (weather: { [string]: any }, unitsParam: strin
   const units = unitsParam === 'metric' ? 'C' : 'F'
   const { sunrise, sunset, temp, uvi, humidity, feels_like, description, main, icon, min, max, day, night, date } =
     weather
-  return `${date}: ${icon} ${description} ${Math.floor(min)}°${units} - ${Math.floor(max)}°${units}`
+  return `${date}: ${icon} ${description} ${min}°${units} - ${max}°${units} uvi: ${uvi}`
 }
