@@ -16,7 +16,8 @@ export const extractDailyForecastData = (weather: { [string]: any }) => {
       const icon = getWeatherIcon(description)
       const { min, max } = temp
       const { day, night } = feels_like //day/night = feels like
-      return { sunrise, sunset, temp, uvi, humidity, feels_like, description, main, icon, min, max, day, night }
+      const date = new Date(dy.dt * 1000).toDateString()
+      return { sunrise, sunset, temp, uvi, humidity, feels_like, description, main, icon, min, max, day, night, date }
     })
   } else {
     logError(pluginJson, `extractDailyForecastData: No weather data to extract for ${JSP(weather)}`)
@@ -49,4 +50,11 @@ export const getWeatherIcon = (description) => {
     logError(pluginJson, `****** getWeatherIcon: No weather icon found for ${description}`)
   }
   return weatherIcon
+}
+
+export const getWeatherDescLine = (weather: { [string]: any }, unitsParam: string) => {
+  const units = unitsParam === 'metric' ? 'C' : 'F'
+  const { sunrise, sunset, temp, uvi, humidity, feels_like, description, main, icon, min, max, day, night, date } =
+    weather
+  return `${date}: ${icon} ${description} ${Math.floor(min)}°${units} - ${Math.floor(max)}°${units}`
 }

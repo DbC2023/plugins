@@ -189,19 +189,29 @@ export async function insertWeatherByLocation(incoming: ?string = ''): Promise<v
  * (Plugin entry point for /Weather by Lat/Long -- hidden -- accessible by xcallback)
  */
 export async function weatherByLatLong(incoming: string = '', showPopup: string = 'no'): Promise<string> {
+  log(pluginJson, `weatherByLatLong: incoming: ${incoming} showPopup: ${showPopup}`)
   try {
     if (incoming?.length) {
       const location = JSON.parse(incoming)
       let text = ''
+      let dfd = []
       if (location.lat && location.lon) {
         log(pluginJson, `weatherByLatLong: have lat/lon for ${location.label}`)
         const weather = await getWeatherForLocation(location, DataStore.settings)
-        const dfd = utils.extractDailyForecastData(weather)
+        dfd = utils.extractDailyForecastData(weather)
+        if (dfd && dfd.length) {
+          dfd.forEach((w, i) => {
+            dfd[i].label = utils.getWeatherDescLine(w)
+            dfd[i].value = i
+          })
+        }
         clo(dfd, `dfd:`)
       }
-      if (showPopup && showPopup == 'yes' && text.length) {
-        Editor.insertTextAtCursor(text)
+      if (showPopup && showPopup == 'yes') {
+        await chooseOption(`Forecast for ${location.label}`, dfd, 0)
+        // Editor.insertTextAtCursor(text)
       } else {
+        text = dfd.map((w) => w.label).join('\n')
         return text
       }
     } else {
