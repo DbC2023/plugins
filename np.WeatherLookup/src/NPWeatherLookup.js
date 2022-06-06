@@ -1,10 +1,16 @@
 // @flow
 
+/*
+TODO: add setting for whether to add now at the top
+TODO: add setting for template replacements
+*/
+
 import * as utils from './support/weather-utils'
 import { log, logError, clo, JSP } from '@helpers/dev'
 import { createRunPluginCallbackUrl, createPrettyRunPluginLink } from '@helpers/general'
 import { chooseOption, getInput, showMessage } from '@helpers/userInput'
 import pluginJson from '../plugin.json'
+import moment from 'moment'
 
 type WeatherParams = {
   appid: string,
@@ -21,6 +27,18 @@ type LocationOption = {
   state: string,
   label: string,
   value: string,
+}
+
+function UTCToLocalTimeString(d, format, timeOffset) {
+  log(pluginJson, `UTCToLocalTimeString: d: ${d} timeOffset:${timeOffset}`)
+  let timeOffsetInHours = timeOffset / 60 / 60
+  if (timeOffsetInHours == null) {
+    timeOffsetInHours = (new Date().getTimezoneOffset() / 60) * -1
+  }
+  log(pluginJson, `UTCToLocalTimeString: timeOffsetInHours: ${timeOffsetInHours}`)
+  d.setHours(d.getUTCHours() + timeOffsetInHours)
+  log(pluginJson, `UTCToLocalTimeString: d: ${d} ${moment(d).format(format)}`)
+  return moment(d).format(format)
 }
 
 async function getLatLongForLocation(searchLocationStr: string = ''): Promise<LocationOption | null> {
@@ -163,6 +181,7 @@ export async function insertWeatherCallbackURL(incoming: string = ''): Promise<s
 /**
  * Get weather for a particular location (passed through variable or via user input)
  * TODO: THIS NEEDS TO BE FINISHED SO IT WRITES WEATHER OUT FORMATTED
+ * TODO: Format now weather differently
  * (Plugin entry point for /Weather by Location Name)
  * @param {*} incoming
  * @returns
@@ -207,9 +226,15 @@ export async function weatherByLatLong(incoming: string = '', showPopup: string 
         const location = JSON.parse(incoming)
         let text = ''
         let dfd = []
+        let locTime = ''
         if (location.lat && location.lon) {
           log(pluginJson, `weatherByLatLong: have lat/lon for ${location.label}`)
           const weather = await getWeatherForLocation(location, DataStore.settings)
+          locTime = UTCToLocalTimeString(new Date(), 'LT', weather['timezone_offset'])
+          log(pluginJson, locTime)
+          const currentWeather = utils.getCurrentConditions(weather.current)
+          const weatherLine = utils.getWeatherDescLine(currentWeather)
+          const now = [{ label: weatherLine, value: -1 }]
           dfd = utils.extractDailyForecastData(weather)
           if (dfd && dfd.length) {
             dfd.forEach((w, i) => {
@@ -217,9 +242,10 @@ export async function weatherByLatLong(incoming: string = '', showPopup: string 
               dfd[i].value = i
             })
           }
+          dfd = [...now, ...dfd]
         }
         if (showPopup && showPopup == 'yes') {
-          await chooseOption(`Forecast for ${location.label}`, dfd, 0)
+          await chooseOption(`${location.label} as of ${locTime} (local time)`, dfd, 0)
           // Editor.insertTextAtCursor(text)
         } else {
           text = dfd.map((w) => w.label).join('\n')

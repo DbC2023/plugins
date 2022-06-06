@@ -2,11 +2,31 @@ import { log, logError, clo, JSP, timer } from '@helpers/dev'
 
 export const isWeatherKeyValid = (key) => key !== null && /[a-f0-9]{32}/.test(key)
 
-export const getWeatherURLLatLong = (lat, lon, appid, units) =>
-  `https://api.openweathermap.org/data/2.5/onecall?lat=${lat}&lon=${lon}&appid=${appid}&units=${units}`
+export const getWeatherURLLatLong = (lat, lon, appid, units) => `https://api.openweathermap.org/data/2.5/onecall?lat=${lat}&lon=${lon}&appid=${appid}&units=${units}`
 // NOTE: There is a version 3.0, but it sends back a 401 error
 
-export const extractDailyForecastData = (weather: { [string]: any }) => {
+export const getCurrentConditions = (currentWeather: { [string]: any }): Array<{}> => {
+  let { sunrise, sunset, temp, feels_like, pressure, humidity, dew_point, uvi, clouds, visibility, wind_speed, wind_deg, weather } = currentWeather
+  temp = Math.round(temp)
+  return {
+    sunrise,
+    sunset,
+    temp,
+    uvi,
+    humidity,
+    feels_like,
+    description: weather[0].description,
+    main: weather[0].main,
+    icon: getWeatherIcon(weather[0].description),
+    min: temp,
+    max: temp,
+    day: feels_like,
+    night: feels_like,
+    date: 'now',
+  }
+}
+
+export const extractDailyForecastData = (weather: { [string]: any }): Array<{}> => {
   let dailyForecast = []
   if (weather && weather.daily?.length > 0) {
     dailyForecast = weather.daily.map((dy) => {
@@ -46,18 +66,7 @@ export const extractDailyForecastData = (weather: { [string]: any }) => {
 }
 
 export const getWeatherIcon = (description) => {
-  const weatherDescText = [
-    'showers',
-    'rain',
-    'sunny intervals',
-    'partly sunny',
-    'sunny',
-    'clear sky',
-    'cloud',
-    'snow ',
-    'thunderstorm',
-    'tornado',
-  ]
+  const weatherDescText = ['showers', 'rain', 'sunny intervals', 'partly sunny', 'sunny', 'clear sky', 'cloud', 'snow ', 'thunderstorm', 'tornado']
   const weatherDescIcons = ['🌦️', '🌧️', '🌤', '⛅', '☀️', '☀️', '☁️', '🌨️', '⛈', '🌪']
   let weatherIcon = ''
   for (let i = 0; i < weatherDescText.length; i++) {
@@ -74,7 +83,6 @@ export const getWeatherIcon = (description) => {
 
 export const getWeatherDescLine = (weather: { [string]: any }, unitsParam: string) => {
   const units = unitsParam === 'metric' ? 'C' : 'F'
-  const { sunrise, sunset, temp, uvi, humidity, feels_like, description, main, icon, min, max, day, night, date } =
-    weather
+  const { sunrise, sunset, temp, uvi, humidity, feels_like, description, main, icon, min, max, day, night, date } = weather
   return `${date}: ${icon} ${description} ${min}°${units} - ${max}°${units} uvi: ${uvi}`
 }
