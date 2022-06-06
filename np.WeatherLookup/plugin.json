@@ -22,7 +22,7 @@
       ]
     },
     {
-      "name": "Weather by Location Name",
+      "name": "Weather by Location Name (NOT WORKING YET)",
       "description": "Prompt for location; Insert at cursor",
       "jsFunction": "insertWeatherByLocation",
       "alias": [

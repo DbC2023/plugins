@@ -28,7 +28,7 @@ async function getLatLongForLocation(searchLocationStr: string = ''): Promise<Lo
     const params = DataStore.settings
     const results = await getLatLongListForName(searchLocationStr, params)
     if (results && results.length > 0) {
-      log(pluginJson, `Results: ${results?.length}`)
+      log(pluginJson, `getLatLongForLocation: Potential Location Results: ${results?.length}`)
       const options = results.map((r, i) => ({
         lat: r.lat,
         lon: r.lon,
@@ -44,6 +44,7 @@ async function getLatLongForLocation(searchLocationStr: string = ''): Promise<Lo
         chosenIndex = await chooseOption(`Which of these?`, options, 0)
       }
       const location = options[chosenIndex]
+      log(pluginJson, `Chosen location: ${JSON.stringify(location)}`)
       return location
     } else {
       await showMessage(`No results found for "${searchLocationStr}"`)
@@ -62,9 +63,7 @@ async function getLatLongForLocation(searchLocationStr: string = ''): Promise<Lo
  * @returns {Promise<Array<{}>} - array of potential locations
  */
 export async function getLatLongListForName(name: string, params: WeatherParams): Promise<Array<{ [string]: any }>> {
-  const url = `https://api.openweathermap.org/geo/1.0/direct?q=${encodeURIComponent(name)}&appid=${
-    params.appid
-  }&limit=5`
+  const url = `https://api.openweathermap.org/geo/1.0/direct?q=${encodeURIComponent(name)}&appid=${params.appid}&limit=5`
   log(`weather-utils::getLatLongForName`, `url: ${url}`)
   try {
     const response = await fetch(url, { timeout: 3000 })
@@ -85,11 +84,7 @@ export async function getLatLongListForName(name: string, params: WeatherParams)
 async function validateWeatherParams(params: WeatherParams): Promise<boolean> {
   if (!params?.appid || !utils.isWeatherKeyValid(params.appid)) {
     logError(pluginJson, `Missing appid`)
-    await showMessage(
-      `Invalid Weather API Key! Please enter a valid Weather API Key in settings`,
-      `OK`,
-      `Invalid Weather API Key`,
-    )
+    await showMessage(`Invalid Weather API Key! Please enter a valid Weather API Key in settings`, `OK`, `Invalid Weather API Key`)
     return false
   }
   return true
@@ -138,24 +133,15 @@ export async function insertWeatherCallbackURL(incoming: string = ''): Promise<s
       return ''
     } else {
       let locationString = incoming
-      if (!locationString?.length)
-        locationString = await CommandBar.textPrompt(
-          'Weather Lookup',
-          'Enter a location name to lookup weather for:',
-          '',
-        )
+      if (!locationString?.length) locationString = await CommandBar.textPrompt('Weather Lookup', 'Enter a location name to lookup weather for:', '')
       if (locationString && locationString?.length) {
         log(pluginJson, `insertWeatherCallbackURL: locationString: ${String(locationString)}`)
         const location = await getLatLongForLocation(locationString)
+        log(pluginJson, `insertWeatherCallbackURL: location: ${JSON.stringify(location)}`)
         if (location) {
           let text = ''
           if (locationString.length) {
-            text = createPrettyRunPluginLink(
-              `${locationString} weather`,
-              pluginJson['plugin.id'],
-              pluginJson['plugin.commands'][0].name,
-              [JSON.stringify(location), 'yes'],
-            )
+            text = createPrettyRunPluginLink(`${locationString} weather`, pluginJson['plugin.id'], pluginJson['plugin.commands'][0].name, [JSON.stringify(location), 'yes'])
           } else {
             logError(pluginJson, `insertWeatherCallbackURL: No location to look for: "${locationString}"`)
           }
@@ -176,6 +162,7 @@ export async function insertWeatherCallbackURL(incoming: string = ''): Promise<s
 
 /**
  * Get weather for a particular location (passed through variable or via user input)
+ * TODO: THIS NEEDS TO BE FINISHED SO IT WRITES WEATHER OUT FORMATTED
  * (Plugin entry point for /Weather by Location Name)
  * @param {*} incoming
  * @returns
@@ -193,6 +180,7 @@ export async function insertWeatherByLocation(incoming: ?string = '', returnLoca
       }
       if (location) {
         const result = await getLatLongForLocation(location)
+        Editor.insertTextAtCursor('This function is not functional yet. Please use the URL version instead.')
         return result
       }
     }
