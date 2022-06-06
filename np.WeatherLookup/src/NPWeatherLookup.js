@@ -30,14 +30,11 @@ type LocationOption = {
 }
 
 function UTCToLocalTimeString(d, format, timeOffset) {
-  log(pluginJson, `UTCToLocalTimeString: d: ${d} timeOffset:${timeOffset}`)
   let timeOffsetInHours = timeOffset / 60 / 60
   if (timeOffsetInHours == null) {
     timeOffsetInHours = (new Date().getTimezoneOffset() / 60) * -1
   }
-  log(pluginJson, `UTCToLocalTimeString: timeOffsetInHours: ${timeOffsetInHours}`)
   d.setHours(d.getUTCHours() + timeOffsetInHours)
-  log(pluginJson, `UTCToLocalTimeString: d: ${d} ${moment(d).format(format)}`)
   return moment(d).format(format)
 }
 
