@@ -321,6 +321,20 @@ type TDataStore = {
    * Get all regular, project notes.
    */
   +projectNotes: $ReadOnlyArray<TNote>,
+  /**
+  * Get all cached hashtags (#tag) that are used across notes.
+  * It returns hashtags without leading '#'.
+  * @type {[String]}
+  * Note: Available from NotePlan v3.6.0
+  */
+  +hashtags: $ReadOnlyArray < string >,
+  /**
+* Get all cached mentions (@name) that are used across notes.
+* It returns mentions without leading '@'.
+* Note: Available from NotePlan v3.6.0
+* @type {[String]}
+*/
+  +mentions: $ReadOnlyArray < string >,
 
   /**
    * Get or set settings for the current plugin (as a JavaScript object).
@@ -348,6 +362,7 @@ type TDataStore = {
    *   "isSmartMarkdownLink"     // "Smart Markdown Links" checked in markdown preferences
    *   "fontSize"                // Font size defined in editor preferences (might be overwritten by custom theme)
    *   "fontFamily"              // Font family defined in editor preferences (might be overwritten by custom theme)
+   *   "timeblockTextMustContainString" // Optional text to trigger timeblock detection in a line
    * Others can be set by plugins.
    */
   +preference: (key: string) => any,
