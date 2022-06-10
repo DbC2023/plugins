@@ -1,8 +1,9 @@
 // @flow
 
 /*
+TODO: insertWeatherCallbackURL(incoming): add ability to create link from location in template - need to look up latlong using (getLatLongForLocation) stringify the results and save/pass it on future calls
 TODO: add setting for whether to add now at the top
-TODO: add setting for template replacements
+TODO: add setting for template replacements (use https://stackoverflow.com/questions/377961/efficient-javascript-string-replacement)
 */
 
 import * as utils from './support/weather-utils'
@@ -116,7 +117,8 @@ function getConfigErrorText(): string {
  * @param {settings} params
  * @returns
  */
-async function getWeatherForLocation(location: LocationOption, params: WeatherParams): Promise<{ [string]: any }> {
+async function getWeatherForLocation(location: LocationOption, weatherParams: WeatherParams): Promise<{ [string]: any }> {
+  const params = weatherParams ? weatherParams : DataStore.settings
   const url = utils.getWeatherURLLatLong(location.lat, location.lon, params.appid, params.units)
   log(`weather-utils::getWeatherForLocation`, `url: \n${url}`)
   try {
@@ -157,11 +159,11 @@ export async function insertWeatherCallbackURL(incoming: string = ''): Promise<s
           let text = ''
           if (locationString.length) {
             text = createPrettyRunPluginLink(`${locationString} weather`, pluginJson['plugin.id'], pluginJson['plugin.commands'][0].name, [JSON.stringify(location), 'yes'])
-          } else {
             logError(pluginJson, `insertWeatherCallbackURL: No location to look for: "${locationString}"`)
           }
           if (incoming.length) {
-            // this must have come from a template call
+            // this must have come from a runPlugin command
+            Editor.insertTextAtCursor(text)
             return text
           } else {
             Editor.insertTextAtCursor(text)

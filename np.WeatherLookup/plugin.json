@@ -9,7 +9,7 @@
   "plugin.author": "dwertheimer",
   "plugin.dependencies": [],
   "plugin.script": "script.js",
-  "plugin.url": "https://github.com/NotePlan/plugins/blob/main/dwertheimer.WeatherLookup/README.md",
+  "plugin.url": "https://github.com/NotePlan/plugins/blob/main/np.WeatherLookup/README.md",
   "plugin.commands": [
     {
       "COMMENT": "DO NOT PASTE COMMAND ABOVE THIS; IT WILL BREAK THE PLUGIN; WE ARE RELYING ON [0] ORDER",
