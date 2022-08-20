@@ -1,45 +1,61 @@
 // @flow
 /**
  * TODO:
- * Can you assign a subtotal line to a variable? @george65#1130 
- * 1) save variables you use frequently in preferences and reference them without defining them every time
  * 2) would be so cool if  @Eduard could tweak autocomplete inside a math block to give you choices of variables without you having to type them in.
  * - Allow for statements inside parens
  *  - make "at" and "per" work properly
  *  - in to cm etc.
+ * - implement format preferences (see hidden user prefs)
  * - implement insertResultsAtCursor
  * - add user pref for whether to include total or not
  * - the second total prints at the bottom (need a cloneDeep to work)
- * - (done) pricePerHour = 20  //= 20 (does not need to print this out)
- * - (done) ignore date on left
+ * (done) Can you assign a subtotal line to a variable? @george65#1130
+ * (done) save variables you use frequently in preferences and reference them without defining them every time
+ * (done) pricePerHour = 20  //= 20 (does not need to print this out)
+ * (done) ignore date on left
  */
 // import {cloneDeep} from 'lodash.clonedeep' // crashes NP
 import pluginJson from '../plugin.json'
-import { chooseOption, showMessage } from "../../helpers/userInput"
-import type { CodeBlock } from "../../helpers/codeBlocks"
-import { type LineInfo, parse} from './support/solver'
-import {getParagraphContainingPosition} from '@helpers/NPParagraph'
+import { chooseOption, showMessage } from '../../helpers/userInput'
+import type { CodeBlock } from '../../helpers/codeBlocks'
+import { type LineInfo, parse } from './support/solver'
+import { getParagraphContainingPosition } from '@helpers/NPParagraph'
 import { log, logDebug, logError, logWarn, clo, JSP } from '@helpers/dev'
-import { createRunPluginCallbackUrl , formatWithFields } from '@helpers/general'
+import { createRunPluginCallbackUrl, formatWithFields } from '@helpers/general'
 import { getCodeBlocksOfType } from '@helpers/codeBlocks'
+import FrontmatterModule from '@templatingModules/FrontmatterModule'
+
+/**
+ * Get the frontmatter variables for this document
+ * @param {string} noteContent
+ * @returns {object} frontmatter values
+ */
+export function getFrontmatterVariables(noteContent: string): any {
+  try {
+    return new FrontmatterModule().attributes(noteContent) // returns frontmatter attributes
+  } catch (error) {
+    logError(pluginJson, JSON)
+    return {}
+  }
+}
 
 /**
  * Format the output according to user preferences
  * @param {Array<LineInfo>} results - the results of the solver's info property
  * @returns {Array<string>} formatted text
  */
-export function formatOutput(results:Array<LineInfo>, formatTemplate:string = "{{originalText}} {{value}}"): Array<string> {
-  const resultsWithStringValues = results.map(line => {
+export function formatOutput(results: Array<LineInfo>, formatTemplate: string = '{{originalText}} {{value}}'): Array<string> {
+  const resultsWithStringValues = results.map((line) => {
     const isPctOf = /(\d*[\.,])?(\d+\s?)(as|as a)?(\s*%)(\s+(of)\s+)(\d*[\.,])?(\d+\s?)/g.test(line.originalText)
     const isZero = line.lineValue === 0
-    const isNotCalc = (String(line.lineValue) === line.expression) && !isPctOf
-    const isNumericalAssignment = line.typeOfResult === "A" && !(/(\+|\-|\*|\/)+/.test(line.originalText))
-    line.value = (isZero || isNotCalc || isNumericalAssignment) ? '' : `//= ${String(line.lineValue)}` // eslint-disable-line eqeqeq
+    const isNotCalc = String(line.lineValue) === line.expression && !isPctOf
+    const isNumericalAssignment = line.typeOfResult === 'A' && !/(\+|\-|\*|\/)+/.test(line.originalText)
+    line.value = isZero || isNotCalc || isNumericalAssignment ? '' : `//= ${String(line.lineValue)}` // eslint-disable-line eqeqeq
     // logDebug(pluginJson, `line.value: ${line.value} line.expression: ${line.expression}`)
     return line
   })
-  const formatted = resultsWithStringValues.map(line => formatWithFields(formatTemplate, line))
-  logDebug(pluginJson,`Formatted data: ${JSON.stringify(resultsWithStringValues,null,2)}`)
+  const formatted = resultsWithStringValues.map((line) => formatWithFields(formatTemplate, line))
+  logDebug(pluginJson, `Formatted data: ${JSON.stringify(resultsWithStringValues, null, 2)}`)
 
   return formatted
 }
@@ -51,7 +67,7 @@ export function formatOutput(results:Array<LineInfo>, formatTemplate:string = "{
 export function parseCodeBlocks(): $ReadOnlyArray<$ReadOnly<CodeBlock>> {
   const codeBlocks = getCodeBlocksOfType('math')
   if (codeBlocks.length) {
-    const results = codeBlocks.map(block => parse(block.text))
+    const results = codeBlocks.map((block) => parse(block.text))
     return results || []
   } else {
     logDebug(pluginJson, `There were no code blocks to parse`)
@@ -62,7 +78,7 @@ export function parseCodeBlocks(): $ReadOnlyArray<$ReadOnly<CodeBlock>> {
 /**
  * Show the results of the solver in the editor at cursor position
  * @param {Array<LineInfo>} results - the results of the solver
- * @param {string} template - should probably be called with settings.documentTemplate 
+ * @param {string} template - should probably be called with settings.documentTemplate
  */
 // export function insertResultsAtCursor(results: Array<LineInfo>,template:string): void {
 //   const formatted = formatOutput(results,template)
@@ -71,12 +87,12 @@ export function parseCodeBlocks(): $ReadOnlyArray<$ReadOnly<CodeBlock>> {
 
 /**
  * Remove annotations from a specific code block
- * @param {*} note 
- * @param {*} blockData 
+ * @param {*} note
+ * @param {*} blockData
  */
-export function removeAnnotations(note:CoreNoteFields, blockData:$ReadOnly<CodeBlock>) {
+export function removeAnnotations(note: CoreNoteFields, blockData: $ReadOnly<CodeBlock>) {
   const updates = []
-  for(let i = 0; i < blockData.paragraphs.length; i++) {
+  for (let i = 0; i < blockData.paragraphs.length; i++) {
     const paragraph = blockData.paragraphs[i]
     if (/ {2}(\/\/\=.*)/g.test(paragraph.content)) {
       const thisParaInNote = note.paragraphs[paragraph.lineIndex]
@@ -87,25 +103,25 @@ export function removeAnnotations(note:CoreNoteFields, blockData:$ReadOnly<CodeB
   if (updates.length) note.updateParagraphs(updates)
 }
 
-export function annotateResults(note:CoreNoteFields, blockData:$ReadOnly<CodeBlock>, results: Array<LineInfo>, template:string, totalsOnly:boolean): void {
-  const formatted = formatOutput(results,template) // writes .value using template?
+export function annotateResults(note: CoreNoteFields, blockData: $ReadOnly<CodeBlock>, results: Array<LineInfo>, template: string, totalsOnly: boolean): void {
+  const formatted = formatOutput(results, template) // writes .value using template?
   removeAnnotations(note, blockData)
   const updates = []
   let j = 0
-  for(let i = 0; i < blockData.paragraphs.length; i++) {
+  for (let i = 0; i < blockData.paragraphs.length; i++) {
     const paragraph = blockData.paragraphs[i]
     const solverData = results[j]
-    const shouldPrint = !totalsOnly || (totalsOnly && (solverData.typeOfResult === "T" || solverData.typeOfResult === "S"))
+    const shouldPrint = !totalsOnly || (totalsOnly && (solverData.typeOfResult === 'T' || solverData.typeOfResult === 'S'))
     if (solverData.value !== '' && shouldPrint) {
-      const comment = `  ${solverData.value}`
+      const comment = solverData.value ? `  ${solverData.value}` : ''
       clo(solverData, `annotateResults solverData`)
-      logDebug(pluginJson,`$comment=${comment}`)
+      logDebug(pluginJson, `$comment=${comment}`)
       const thisParaInNote = note.paragraphs[paragraph.lineIndex]
       // thisParaInNote.content.replace(/ {2}(\/\/\=.*)/g,'')
       thisParaInNote.content += comment
       updates.push(thisParaInNote)
-// `    logDebug(`annotateResults: paragraph.lineIndex: ${paragraph.lineIndex} content="${paragraph.content}" results[].value=${solverData.value || ''}`)
-//      logDebug(`${paragraph.content}${comment}`)
+      // `    logDebug(`annotateResults: paragraph.lineIndex: ${paragraph.lineIndex} content="${paragraph.content}" results[].value=${solverData.value || ''}`)
+      //      logDebug(`${paragraph.content}${comment}`)
     }
     j++
   }
@@ -115,18 +131,18 @@ export function annotateResults(note:CoreNoteFields, blockData:$ReadOnly<CodeBlo
 
 /**
  * Show the results of the solver in popup
- * @param {Array<LineInfo>} results - the results of the solver 
+ * @param {Array<LineInfo>} results - the results of the solver
  * @param {string} template - should probably be called with settings.documentTemplate
  * @param {string} title - the title of the popup
  */
-export async function showResultsInPopup(results: Array<LineInfo>,template:string, title:string): void {
+export async function showResultsInPopup(results: Array<LineInfo>, template: string, title: string): void {
   if (results.length) {
-    const formattedLines = formatOutput(results,template)
-    const options = formattedLines.map((line,i)=>({label:line,value:String(results[i].lineValue)}))
-    logDebug(pluginJson,`Showing results in popup: ${String(options.map(o=>o.label))}`)
-    const selected = await chooseOption(`${title} Results (return to copy line value)`,options,options[0].value)
+    const formattedLines = formatOutput(results, template)
+    const options = formattedLines.map((line, i) => ({ label: line, value: String(results[i].lineValue) }))
+    logDebug(pluginJson, `Showing results in popup: ${String(options.map((o) => o.label))}`)
+    const selected = await chooseOption(`${title} Results (return to copy line value)`, options, options[0].value)
     if (selected) {
-      logDebug(pluginJson,`Selected: ${selected}`)
+      logDebug(pluginJson, `Selected: ${selected}`)
       Clipboard.string = String(selected)
     }
   }
@@ -142,7 +158,7 @@ export function removeAllAnnotations(): void {
     const codeBlocks = getCodeBlocksOfType(Editor, 'math')
     const note = Editor
     if (!note) return
-    for(let i = 0; i < codeBlocks.length; i++) {
+    for (let i = 0; i < codeBlocks.length; i++) {
       const blockData = codeBlocks[i]
       removeAnnotations(note, blockData)
     }
@@ -154,36 +170,36 @@ export function removeAllAnnotations(): void {
  * @param {string} incoming - math block text to process
  * @param {boolean} totalsOnly - if true, only calculate totals (default: false)
  */
-export async function calculateBlocks(incoming:string|null = null, totalsOnly:boolean = true): Promise<void> {
+export async function calculateBlocks(incoming: string | null = null, totalsOnly: boolean = true, vars: any = {}): Promise<void> {
   try {
-    const { popUpTemplate } = DataStore.settings
+    const { popUpTemplate, presetValues } = DataStore.settings
     // get the code blocks in the editor
-      let codeBlocks = (incoming === '' || incoming === null) ? getCodeBlocksOfType(Editor, `math`) : [{ type: "unknown", code: incoming, startLineIndex: -1 }]
-      logDebug(pluginJson,`calculateEditorMathBlocks: codeBlocks.length: ${codeBlocks.length}`)
+    let codeBlocks = incoming === '' || incoming === null ? getCodeBlocksOfType(Editor, `math`) : [{ type: 'unknown', code: incoming, startLineIndex: -1 }]
+    logDebug(pluginJson, `calculateEditorMathBlocks: codeBlocks.length: ${codeBlocks.length}`)
     if (codeBlocks.length && Editor) {
-      for (let b =0; b < codeBlocks.length; b++) {
-        if (b>0) {
+      for (let b = 0; b < codeBlocks.length; b++) {
+        if (b > 0) {
           // get the codeblocks again because the line indexes may have changed if the last round made edits
-          codeBlocks = getCodeBlocksOfType(Editor,`math`)
+          codeBlocks = getCodeBlocksOfType(Editor, `math`)
         }
         const block = codeBlocks[b]
         // clo(block,`calculateEditorMathBlocks block=`)
-        let currentData = {info: [], variables: {}, relations: [], expressions: [], rows: 0}
-        block.code.split("\n").forEach((line,i)=>{
-            currentData.rows = i+1
-            currentData = parse(line,i,currentData)
+        let currentData = { info: [], variables: { ...presetValues, ...vars }, relations: [], expressions: [], rows: 0 }
+        block.code.split('\n').forEach((line, i) => {
+          currentData.rows = i + 1
+          currentData = parse(line, i, currentData)
         })
-        const totalData = parse("TOTAL",currentData.rows,currentData)
+        const totalData = parse('TOTAL', currentData.rows, currentData)
         const t = totalData.info[currentData.rows]
         const totalLine = {
-          "lineValue": t.lineValue,
-          "originalText": t.originalText,
-          "expression": t.expression,
-          "row": -1,
-          "typeOfResult": t.typeOfResult,
-          "typeOfResultFormat": t.typeOfResultFormat,
-          "value": t.value,
-          error: ''
+          lineValue: t.lineValue,
+          originalText: t.originalText,
+          expression: t.expression,
+          row: -1,
+          typeOfResult: t.typeOfResult,
+          typeOfResultFormat: t.typeOfResultFormat,
+          value: t.value,
+          error: '',
         }
         // logDebug(pluginJson,`Final data: ${JSON.stringify(currentData,null,2)}`)
         // TODO: Maybe add a total if there isn't one? But maybe people are not adding?
@@ -191,14 +207,14 @@ export async function calculateBlocks(incoming:string|null = null, totalsOnly:bo
         //   currentData = parse("total",i,currentData)
         // }
         // TODO: add user pref for whether to include total or not
-        await annotateResults(Editor,block,currentData.info,popUpTemplate,totalsOnly)
+        await annotateResults(Editor, block, currentData.info, popUpTemplate, totalsOnly)
         // await showResultsInPopup([totalLine,...currentData.info], popUpTemplate, `Block ${b+1}`)
       }
     } else {
       const msg = `Did not find any 'math' code blocks in active editor`
-      logDebug(pluginJson,msg)
+      logDebug(pluginJson, msg)
       await showMessage(msg)
-    }  
+    }
   } catch (error) {
     logError(pluginJson, `calculateBlocks error: ${error}`)
   }
@@ -207,21 +223,21 @@ export async function calculateBlocks(incoming:string|null = null, totalsOnly:bo
 /**
  * Calculate all the math blocks on the current page
  * (plugin entrypoint for command: /Calculate Math Code Blocks in Active Document)
- * @param {*} incoming 
+ * @param {*} incoming
  */
-export async function calculateEditorMathBlocks(incoming:string|null = null) {
+export async function calculateEditorMathBlocks(incoming: string | null = null) {
   try {
-    await calculateBlocks(incoming,false)
+    await calculateBlocks(incoming, false, getFrontmatterVariables(Editor.content || ''))
   } catch (error) {
-    logError(pluginJson,error)
+    logError(pluginJson, error)
   }
 }
 
-export async function calculateEditorMathBlocksTotalsOnly(incoming:string|null = null) {
+export async function calculateEditorMathBlocksTotalsOnly(incoming: string | null = null) {
   try {
-    await calculateBlocks(incoming,true)    
+    await calculateBlocks(incoming, true, getFrontmatterVariables(Editor.content || ''))
   } catch (error) {
-    logError(pluginJson,error)
+    logError(pluginJson, error)
   }
 }
 
@@ -231,7 +247,7 @@ export async function calculateEditorMathBlocksTotalsOnly(incoming:string|null =
  */
 export async function insertMathBlock() {
   try {
-    const {includeCalc,includeClear, includeTotals} = DataStore.settings
+    const { includeCalc, includeClear, includeTotals } = DataStore.settings
     // NOTE: this relies on the calculate command being the first in the list in plugin.json
     const calcLink = includeCalc ? `[Calculate](${createRunPluginCallbackUrl(pluginJson['plugin.id'], pluginJson['plugin.commands'][0].name)})` : ''
     const clrLink = includeClear ? `[Clear](${createRunPluginCallbackUrl(pluginJson['plugin.id'], pluginJson['plugin.commands'][1].name)})` : ''
@@ -241,7 +257,7 @@ export async function insertMathBlock() {
     buttonLine = includeTotals ? `${buttonLine + (includeClear || includeCalc ? ` ` : '')}${totLink}` : buttonLine
     buttonLine = buttonLine.length ? `${buttonLine}\n` : ''
     const onLine = getParagraphContainingPosition(Editor, Editor.selection.start)
-    const returnIfNeeded = onLine?.type !== "empty" ? "\n" : ""
+    const returnIfNeeded = onLine?.type !== 'empty' ? '\n' : ''
     const block = `${returnIfNeeded}\`\`\`math\n\n\`\`\`\n${buttonLine}`
     await Editor.insertTextAtCursor(block)
     const sel = Editor.selection
@@ -249,13 +265,13 @@ export async function insertMathBlock() {
       const para = getParagraphContainingPosition(Editor, Editor.selection.start)
       if (para && para.lineIndex) {
         const offset = buttonLine.length ? 3 : 2
-        const range = Editor.paragraphs[para.lineIndex-offset].contentRange
+        const range = Editor.paragraphs[para.lineIndex - offset].contentRange
         if (range?.start) {
           Editor.select(range.start, 0)
         }
       }
     }
   } catch (error) {
-    logError(pluginJson,error)
+    logError(pluginJson, error)
   }
 }

@@ -18,7 +18,6 @@ beforeAll(() => {
 
 describe.skip('dwertheimer.MathSolver' /* pluginID */, () => {
   describe('placeholder' /* file */, () => {
-    test('should hold space for new tests', () => {
-    })
+    test('should hold space for new tests', () => {})
   })
 }) /* describe */
