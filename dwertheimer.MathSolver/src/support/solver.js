@@ -38,8 +38,12 @@ export type CurrentData = {
 }
 
 
-import math from './math.min'
-import {log,logDebug,logError,clo,JSP} from '@helpers/dev'
+// import math from './math.min'
+// import {create, all} from 'mathjs/lib/esm/number.js'
+import {create, all} from 'mathjs/lib/esm/number'
+const math = create(all)
+
+import { log, logDebug, logError, clo, JSP } from '@helpers/dev'
 
 const functionNames = ['sin', 'cos', 'tan', 'exp', 'sqrt', 'ceil', 'floor', 'abs', 'acos', 'asin', 'atan', 'log', 'round']
 const specialOperator = ['in\\b', 'k\\b', 'M\\b', 'mm\\b', 'cm\\b', 'm\\b', 'km\\b', 'mg\\b', 'g\\b', 'kg\\b', 'cm2\\b', 'm2\\b', 'km2\\b']

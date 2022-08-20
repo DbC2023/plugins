@@ -1,21 +1,24 @@
 // @flow
 /**
  * TODO:
- * - ignore date on left
+ * Can you assign a subtotal line to a variable? @george65#1130 
+ * 1) save variables you use frequently in preferences and reference them without defining them every time
+ * 2) would be so cool if  @Eduard could tweak autocomplete inside a math block to give you choices of variables without you having to type them in.
  * - Allow for statements inside parens
  *  - make "at" and "per" work properly
  *  - in to cm etc.
  * - implement insertResultsAtCursor
  * - add user pref for whether to include total or not
  * - the second total prints at the bottom (need a cloneDeep to work)
- * - pricePerHour = 20  //= 20 (does not need to print this out, but how to determine this? maybe we need mathOnly)
+ * - (done) pricePerHour = 20  //= 20 (does not need to print this out)
+ * - (done) ignore date on left
  */
 // import {cloneDeep} from 'lodash.clonedeep' // crashes NP
 import pluginJson from '../plugin.json'
 import { chooseOption, showMessage } from "../../helpers/userInput"
 import type { CodeBlock } from "../../helpers/codeBlocks"
 import { type LineInfo, parse} from './support/solver'
-import {getParagraphContainingPosition, selectedLinesIndex} from '@helpers/NPParagraph'
+import {getParagraphContainingPosition} from '@helpers/NPParagraph'
 import { log, logDebug, logError, logWarn, clo, JSP } from '@helpers/dev'
 import { createRunPluginCallbackUrl , formatWithFields } from '@helpers/general'
 import { getCodeBlocksOfType } from '@helpers/codeBlocks'
