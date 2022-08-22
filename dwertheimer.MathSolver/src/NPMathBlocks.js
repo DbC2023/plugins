@@ -1,6 +1,7 @@
 // @flow
 /**
  * TODO:
+ * refactor to make more modular and eliminate relations and one of the each-line-loops
  * 2) would be so cool if  @Eduard could tweak autocomplete inside a math block to give you choices of variables without you having to type them in.
  * - Allow for statements inside parens
  *  - make "at" and "per" work properly
@@ -9,6 +10,7 @@
  * - implement insertResultsAtCursor
  * - add user pref for whether to include total or not
  * - the second total prints at the bottom (need a cloneDeep to work)
+ * (done) Nested frontmatter under mathPresets
  * (done) Can you assign a subtotal line to a variable? @george65#1130
  * (done) save variables you use frequently in preferences and reference them without defining them every time
  * (done) pricePerHour = 20  //= 20 (does not need to print this out)
@@ -24,6 +26,7 @@ import { log, logDebug, logError, logWarn, clo, JSP } from '@helpers/dev'
 import { createRunPluginCallbackUrl, formatWithFields } from '@helpers/general'
 import { getCodeBlocksOfType } from '@helpers/codeBlocks'
 import FrontmatterModule from '@templatingModules/FrontmatterModule'
+import { getAttributes } from '@templating/support/modules/FrontmatterModule'
 
 /**
  * Get the frontmatter variables for this document
@@ -32,9 +35,11 @@ import FrontmatterModule from '@templatingModules/FrontmatterModule'
  */
 export function getFrontmatterVariables(noteContent: string): any {
   try {
-    return new FrontmatterModule().attributes(noteContent) // returns frontmatter attributes
+    const noteContentNoTabs = noteContent.replace('\t', ' ') //tabs in frontmatter break hierarchy
+    const fmVars = getAttributes(noteContentNoTabs)
+    return fmVars && fmVars.mathPresets ? fmVars.mathPresets : {}
   } catch (error) {
-    logError(pluginJson, JSON)
+    logError(pluginJson, JSON.stringify(error))
     return {}
   }
 }
@@ -51,6 +56,7 @@ export function formatOutput(results: Array<LineInfo>, formatTemplate: string = 
     const isNotCalc = String(line.lineValue) === line.expression && !isPctOf
     const isNumericalAssignment = line.typeOfResult === 'A' && !/(\+|\-|\*|\/)+/.test(line.originalText)
     line.value = isZero || isNotCalc || isNumericalAssignment ? '' : `//= ${String(line.lineValue)}` // eslint-disable-line eqeqeq
+    if (line.error) line.value += ` //= ${line.error}`
     // logDebug(pluginJson, `line.value: ${line.value} line.expression: ${line.expression}`)
     return line
   })
@@ -223,21 +229,26 @@ export async function calculateBlocks(incoming: string | null = null, totalsOnly
 /**
  * Calculate all the math blocks on the current page
  * (plugin entrypoint for command: /Calculate Math Code Blocks in Active Document)
- * @param {*} incoming
+ * @param {string} incoming - string from xcallback entry
  */
 export async function calculateEditorMathBlocks(incoming: string | null = null) {
   try {
     await calculateBlocks(incoming, false, getFrontmatterVariables(Editor.content || ''))
   } catch (error) {
-    logError(pluginJson, error)
+    logError(pluginJson, JSON.stringify(error))
   }
 }
 
+/**
+ * Calculate all the math blocks on the current page but annotate the totals only
+ * (plugin entrypoint for command: /Calculate Totals Only)
+ * @param {string} incoming - string from xcallback entry
+ */
 export async function calculateEditorMathBlocksTotalsOnly(incoming: string | null = null) {
   try {
     await calculateBlocks(incoming, true, getFrontmatterVariables(Editor.content || ''))
   } catch (error) {
-    logError(pluginJson, error)
+    logError(pluginJson, JSON.stringify(error))
   }
 }
 

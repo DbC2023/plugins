@@ -67,11 +67,12 @@ Assignment operations store values in named variables, e.g.
 
 If there are variables you want to use over and over again in different documents, you can save them in the "Preset Variables" field in this plugin's preferences. Those variables will then be available to you by name in any Math Block.
 
-If, on the other hand, there are variables you want to re-use in multiple math blocks inside a particular note, you can save those variables as frontmatter, e.g.:
+If, on the other hand, there are variables you want to re-use in multiple math blocks inside one particular note, you can save those variables in the frontmatter of the note indented (***with spaces (NOT TABS)***) under a heading called `mathPresets`, e.g.:
 ```
 ---
-myVar: 20
-anotherOne: 50
+mathPresets:
+  myVar: 20
+  anotherOne: 50
 ---
 note content here
 ```

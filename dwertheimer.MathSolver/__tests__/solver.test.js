@@ -343,6 +343,26 @@ describe('dwertheimer.MathSolver' /* pluginID */, () => {
         }
         expect(currentData.variables['R5'].size()).toEqual([2, 2])
       })
+      test('should produce syntax error on nonsense statement', () => {
+        let currentData = { info: [], variables: {}, relations: [], expressions: [] }
+        const severalLines = ['2 4 6']
+        for (let i = 0; i < severalLines.length; i++) {
+          const line = severalLines[i]
+          currentData.rows = i + 1
+          currentData = s.parse(line, i, currentData)
+        }
+        expect(currentData.info[0].error).toMatch(/Syntax/)
+      })
+      test('should ignore nonsense statements and continue processing', () => {
+        let currentData = { info: [], variables: {}, relations: [], expressions: [] }
+        const severalLines = ['2 4 6', '2+2']
+        for (let i = 0; i < severalLines.length; i++) {
+          const line = severalLines[i]
+          currentData.rows = i + 1
+          currentData = s.parse(line, i, currentData)
+        }
+        expect(currentData.info[1].error).toEqual(undefined)
+      })
     })
 
     /*
@@ -380,23 +400,29 @@ describe('dwertheimer.MathSolver' /* pluginID */, () => {
     describe('removeParentheticals()' /* function */, () => {
       test('should find and remove quoted in middle', () => {
         const input = 'this is "quoted" string'
-        const result = s.removeParentheticals(input)
+        const result = s.removeParentheticals(input)[1]
         expect(result).toEqual('this is string')
       })
       test('should find and remove bracketed in middle', () => {
-        const input = 'this is [quoted] string'
-        const result = s.removeParentheticals(input)
+        const input = 'this is {quoted} string'
+        const result = s.removeParentheticals(input)[1]
         expect(result).toEqual('this is string')
       })
       test('should find and remove multiple items in a line', () => {
-        const input = 'this is [quoted] string and "quoted"'
-        const result = s.removeParentheticals(input)
+        const input = 'this is {quoted} string and "quoted"'
+        const result = s.removeParentheticals(input)[1]
         expect(result).toEqual('this is string and')
       })
       test('should remove spaces at front and end', () => {
-        const input = ' [this] is [quoted] string and "quoted"'
-        const result = s.removeParentheticals(input)
+        const input = ' {this} is string and "quoted" '
+        const result = s.removeParentheticals(input)[1]
         expect(result).toEqual('is string and')
+      })
+      test('should return the found part(s) as the first var in the tuple (type Array)', () => {
+        const input = ' {this} is string and "quoted"'
+        const result = s.removeParentheticals(input)[0]
+        expect(result[0]).toEqual('this')
+        expect(result[1]).toEqual('quoted')
       })
     })
   })

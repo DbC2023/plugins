@@ -19,8 +19,6 @@
  * {string} typeOfResultFormat: N for normal, % for percentage
  */
 
-import pluginJson from '@rollup/plugin-json'
-
 export type LineInfo = {
   lineValue: number | null,
   originalText: string,
@@ -72,20 +70,22 @@ const currencies = ['$']
 /**
  * Remove items enclosed in quotes or square brackets to be sent directly to mathjs
  * @param {string} inString
- * @returns {[string,string]} [stringFound, stringWithout]
+ * @returns {[string,string]} [stringFound, stringWithoutFoundText]
  */
-export function removeParentheticals(inString: string): [string, string] {
-  const reParens = /(?:[\"\[])(.*?)(?:[\"\]])/g
+export function removeParentheticals(inString: string): [string, Array<string>] {
+  const reParens = /(?:\"|{)(.*?)(?:\"|})/g
   const matches = inString.match(reParens)
   // matches[0] includes the delimiter, matches[1] is the inside string
   // NEED TO DO A doWhile to get them all
-  //FIXME: I AM HERE
+  // FIXME: I AM HERE
   let match,
+    quotedContent = [],
     newStr = inString
   while ((match = reParens.exec(inString))) {
     newStr = newStr.replace(match[0], '').replace(/ {2,}/g, ' ').trim()
-    return [match[0], newStr]
+    quotedContent.push(match[1])
   }
+  return [quotedContent.length ? quotedContent : [], newStr]
 }
 
 function checkIfUnit(obj) {
@@ -169,22 +169,26 @@ export function parse(thisLineStr: string, lineIndex: number, currentData: Curre
   // Remove comment+colon
   strToBeParsed = removeTextPlusColon(strToBeParsed)
 
+  let preProcessedValue = null
   try {
     const results = math.evaluate([strToBeParsed], variables)
-    clo(results, `test math.js result on line: ${strToBeParsed}`)
+    clo(results, `math.js pre-process success on: "${strToBeParsed}" Array<${typeof results[0]}> =`)
+    preProcessedValue = results[0]
   } catch (error) {
-    logError(pluginJson, JSON.stringify(error))
+    // errors are to be expected since we are pre-processing
+    // error messages: "Undefined symbol total", "Unexpected part "4" (char 7)"
+    logDebug(pluginJson, `math.js pre-process failed on "${strToBeParsed}" with message: "${error.message}"`)
   }
 
   // Look for passthroughs (quoted or square brackets)
-  const [foundStr, strWithoutFound] = removeParentheticals
-  if (foundStr) {
-    strToBeParsed = strWithoutFound
-    const results = math.evaluate([foundStr], variables)
-    info[selectedRow].typeOfResult = 'H'
-    info[selectedRow].lineValue = results[0]
-    clo(results, `passtrhough ${foundStr}`)
-  }
+  // const [foundStr, strWithoutFound] = removeParentheticals(strToBeParsed)
+  // if (foundStr) {
+  //   strToBeParsed = strWithoutFound
+  //   const results = math.evaluate([foundStr], variables)
+  //   info[selectedRow].typeOfResult = 'H'
+  //   info[selectedRow].lineValue = results[0]
+  //   clo(results, `passtrhough ${foundStr}`)
+  // }
 
   let out = '0' // used for subtotals and totals
 
@@ -304,16 +308,20 @@ export function parse(thisLineStr: string, lineIndex: number, currentData: Curre
     const results = math.evaluate(expressions, variables)
     // results.map((e, i) => variables[`R${i}`] = checkIfUnit(e) ? math.unit(e) : e)  // you put the row results in the variables
     results.map((e, i) => {
+      clo(expressions[i], `parse:expressions[i]`)
       const rounded = Number(math.format(e, { precision: 14 }))
       variables[`R${i}`] = checkIfUnit(e) ? math.unit(e) : isNaN(rounded) ? e : rounded
       info[i].lineValue = variables[`R${i}`]
       info[i].expression = expressions[i]
       if (info[i].typeOfResult === 'N' && mathOnlyStr.trim() === '' && info[i].expression === '0') {
         // logDebug(`solver::parse`,`R${i}: "${info[i].originalText}" is a number; info[i].typeOfResult=${info[i].typeOfResult} expressions[i]=${expressions[i]}`)
-        info[i].error = `was not a number, equation, variable or comment`
+        if (info[i].originalText.trim() !== '') {
+          info[i].error = `was not a number, equation, variable or comment`
+        }
       }
     }) // keep for NP output metadata
-    const data = updateRelated({ info, variables, relations, expressions, rows })
+    let data = { info, variables, relations, expressions, rows }
+    // data = updateRelated(data)
     //    logDebug(`solver::parse`,`Returning (one-line):\n${JSON.stringify(data)}`)
     //    logDebug(`solver::parse`,`Returning (Pretty):\n${JSON.stringify(data,null,2)}`)
     return data
@@ -321,6 +329,9 @@ export function parse(thisLineStr: string, lineIndex: number, currentData: Curre
   } catch (error) {
     // createOrUpdateResult('')
     console.log(`Error completing expression in: ${String(expressions)} ${error}`)
+    info[selectedRow].error = error.toString()
+    info[selectedRow].typeOfResult = 'E'
+    expressions[selectedRow] = null
     return { info, variables, relations, expressions, rows }
   }
 }

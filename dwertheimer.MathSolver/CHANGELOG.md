@@ -4,6 +4,9 @@
 
 See Plugin [README](https://github.com/NotePlan/plugins/blob/main/dwertheimer.MathSolver/README.md) for details on available commands and use case.
 
+## [1.0.4] - 2022-08-20 (@dwertheimer)
+- Frontmatter changed to require variables under mathPresets
+
 ## [1.0.3] - 2022-08-19 (@dwertheimer)
 - Added ability to assign (sub)total to a variable. Thx @george65#1130
 - Added presets in preferences
