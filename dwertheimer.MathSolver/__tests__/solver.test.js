@@ -160,6 +160,18 @@ describe('dwertheimer.MathSolver' /* pluginID */, () => {
         const result = s.parse('total', 2, currentData)
         expect(result.variables).toEqual({ R0: 4, R1: 4, R2: 4, myVar: 4 })
       })
+      test('should work as expected for someone who mistakenly inputs total=a+b', () => {
+        const str = 'total = temp'
+        let currentData = { expressions: ['temp = 2'], info: [{ row: 0, typeOfResult: 'N', typeOfResultFormat: 'N' }], relations: [[null]], variables: { R0: 2, temp: 2 }, rows: 2 }
+        currentData = s.parse(str, 1, currentData)
+        expect(currentData.variables).toEqual({ R0: 2, R1: 2, temp: 2, total: 2 })
+      })
+      test('should work as expected for someone who mistakenly inputs total=a+b', () => {
+        const str = 'total = temp + 2'
+        let currentData = { expressions: ['temp = 2'], info: [{ row: 0, typeOfResult: 'N', typeOfResultFormat: 'N' }], relations: [[null]], variables: { R0: 2, temp: 2 }, rows: 2 }
+        currentData = s.parse(str, 1, currentData)
+        expect(currentData.variables).toEqual({ R0: 2, R1: 4, temp: 2, total: 4 })
+      })
       test('should add two lines properly', () => {
         const str = 'varname + 99'
         const currentData = {

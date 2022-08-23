@@ -1,6 +1,7 @@
 // @flow
 /**
  * TODO:
+ * add output columns https://www.npmjs.com/package/columnify (showColumns fa;se)
  * refactor to make more modular and eliminate relations and one of the each-line-loops
  * 2) would be so cool if  @Eduard could tweak autocomplete inside a math block to give you choices of variables without you having to type them in.
  * - Allow for statements inside parens
@@ -15,6 +16,7 @@
  * (done) save variables you use frequently in preferences and reference them without defining them every time
  * (done) pricePerHour = 20  //= 20 (does not need to print this out)
  * (done) ignore date on left
+ * Reference: https://numpad.io/
  */
 // import {cloneDeep} from 'lodash.clonedeep' // crashes NP
 import pluginJson from '../plugin.json'
@@ -25,7 +27,6 @@ import { getParagraphContainingPosition } from '@helpers/NPParagraph'
 import { log, logDebug, logError, logWarn, clo, JSP } from '@helpers/dev'
 import { createRunPluginCallbackUrl, formatWithFields } from '@helpers/general'
 import { getCodeBlocksOfType } from '@helpers/codeBlocks'
-import FrontmatterModule from '@templatingModules/FrontmatterModule'
 import { getAttributes } from '@templating/support/modules/FrontmatterModule'
 
 /**
@@ -100,9 +101,9 @@ export function removeAnnotations(note: CoreNoteFields, blockData: $ReadOnly<Cod
   const updates = []
   for (let i = 0; i < blockData.paragraphs.length; i++) {
     const paragraph = blockData.paragraphs[i]
-    if (/ {2}(\/\/\=.*)/g.test(paragraph.content)) {
+    if (/(\/\/\=.*)/g.test(paragraph.content)) {
       const thisParaInNote = note.paragraphs[paragraph.lineIndex]
-      thisParaInNote.content = thisParaInNote.content.replace(/ {2}(\/\/\=.*)/g, '')
+      thisParaInNote.content = thisParaInNote.content.replace(/(\/\/\=.*)/g, '')
       updates.push(thisParaInNote)
     }
   }

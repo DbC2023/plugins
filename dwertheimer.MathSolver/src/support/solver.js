@@ -130,7 +130,7 @@ function setRelation(selectedRow, presences, relations) {
 
 export function removeTextPlusColon(strToBeParsed) {
   const line = strToBeParsed.trim()
-  const isTotal = /(sub)?total/i.test(strToBeParsed)
+  const isTotal = /(sub)?total:/i.test(strToBeParsed) // allow total: or subtotal:
   return isTotal ? strToBeParsed : strToBeParsed.replace(/^.*:/gm, '')
 }
 
@@ -193,34 +193,37 @@ export function parse(thisLineStr: string, lineIndex: number, currentData: Curre
   let out = '0' // used for subtotals and totals
 
   // Subtotals
-  if (/(subtotal\b).*/gi.test(strToBeParsed)) {
-    info[selectedRow].typeOfResult = 'S'
-    for (let i = selectedRow - 1; i >= 0; i--) {
-      if (info[i].typeOfResult === 'N') {
-        out += `+ R${i}`
-        // H for header, S per subtotal, T per total
-      } else if (info[i].typeOfResult === 'S' || info[i].typeOfResult === 'T') {
-        break
-      }
-    }
-    // Totals
-  } else if (/(total\b).*/gi.test(strToBeParsed)) {
-    info[selectedRow].typeOfResult = 'T'
-    for (let i = 0; i <= rows - 2; i++) {
-      if (info[i].typeOfResult === 'N') {
-        out += `+ R${i}`
-      }
-    }
-  }
-  if (out !== '0') {
-    if (/[=]/.test(strToBeParsed)) {
-      while ((match = reAssignmentSides.exec(strToBeParsed))) {
-        if (match[1]?.trim() !== '' && match[2]?.trim() !== '') {
-          strToBeParsed = strToBeParsed.replace(match[0], `${match[1]} = ${out}`)
+  if (!/((sub)?total\s*={1,})/.test(strToBeParsed)) {
+    // guard against someone using "total = a + b"
+    if (/(subtotal\b).*/gi.test(strToBeParsed)) {
+      info[selectedRow].typeOfResult = 'S'
+      for (let i = selectedRow - 1; i >= 0; i--) {
+        if (info[i].typeOfResult === 'N') {
+          out += `+ R${i}`
+          // H for header, S per subtotal, T per total
+        } else if (info[i].typeOfResult === 'S' || info[i].typeOfResult === 'T') {
+          break
         }
       }
-    } else {
-      strToBeParsed = out // build the string for the totals
+      // Totals
+    } else if (/(total\b).*/gi.test(strToBeParsed)) {
+      info[selectedRow].typeOfResult = 'T'
+      for (let i = 0; i <= rows - 2; i++) {
+        if (info[i].typeOfResult === 'N') {
+          out += `+ R${i}`
+        }
+      }
+    }
+    if (out !== '0') {
+      if (/[=]/.test(strToBeParsed)) {
+        while ((match = reAssignmentSides.exec(strToBeParsed))) {
+          if (match[1]?.trim() !== '' && match[2]?.trim() !== '') {
+            strToBeParsed = strToBeParsed.replace(match[0], `${match[1]} = ${out}`)
+          }
+        }
+      } else {
+        strToBeParsed = out // build the string for the totals
+      }
     }
   }
 
