@@ -4,6 +4,15 @@
 
 See Plugin [README](https://github.com/NotePlan/plugins/blob/main/dwertheimer.MathSolver/README.md) for details on available commands and use case.
 
+## [1.0.7] - 2022-08-23 (@dwertheimer)
+- Trap for syntax errors and display errors
+
+## [1.0.6] - 2022-08-23 (@dwertheimer)
+- Potential fix for @george65 subtotal assignment issue
+
+## [1.0.5] - 2022-08-22 (@dwertheimer)
+- Added /debug Math Code 
+
 ## [1.0.4] - 2022-08-22 (@dwertheimer)
 - Frontmatter changed to require variables under mathPresets
 - Allow users to enter "total = var1 + var2"

@@ -283,11 +283,11 @@ describe('dwertheimer.MathSolver' /* pluginID */, () => {
         expect(currentData.info[0].expression).toEqual('4 + 6')
         expect(currentData.variables['R0']).toEqual(10)
       })
-      test('should return error msg when there are no numbers, vars or comment', () => {
+      test('should not produce error on colon text', () => {
         let currentData = { info: [], variables: {}, relations: [], expressions: [], rows: 1 }
-        const string = 'books and bees'
+        const string = 'books:'
         currentData = s.parse(string, 0, currentData)
-        expect(currentData.info[0].error.length).toBeGreaterThan(0)
+        expect(currentData.info[0].error.length).toEqual(0)
       })
       test('should do the right thing for multi-line with bad data in the middle', () => {
         let currentData = { info: [], variables: {}, relations: [], expressions: [] }
@@ -365,6 +365,20 @@ describe('dwertheimer.MathSolver' /* pluginID */, () => {
         }
         expect(currentData.info[0].error).toMatch(/Syntax/)
       })
+      test('should subtotal properly when there are subtotal assignments', () => {
+        let currentData = { info: [], variables: {}, relations: [], expressions: [] }
+        const severalLines = ['Quickbooks: 300','myVar = subtotal','subtotal','Frogs = 22','subtotal','stuff = 2 + Frogs','1*1','total','stuff']
+        for (let i = 0; i < severalLines.length; i++) {
+          const line = severalLines[i]
+          currentData.rows = i + 1
+          currentData = s.parse(line, i, currentData)
+        }
+        expect(currentData.info[2].lineValue).toEqual(0) //'subtotal' there was just a subtotal assignment, so an immediate following subtotal should be zero
+        expect(currentData.info[4].lineValue).toEqual(0) //'subtotal' subtotal should only count from the previous subtotal
+        expect(currentData.info[5].lineValue).toEqual(24) //'stuff = 2 + Frogs' variable addition/assign should not affect total
+        expect(currentData.info[7].lineValue).toEqual(301) //'total' total should single-count the numbers
+        expect(currentData.info[8].lineValue).toEqual(24) //'stuff' previous assignment should still be true
+      })
       test('should ignore nonsense statements and continue processing', () => {
         let currentData = { info: [], variables: {}, relations: [], expressions: [] }
         const severalLines = ['2 4 6', '2+2']
@@ -373,7 +387,7 @@ describe('dwertheimer.MathSolver' /* pluginID */, () => {
           currentData.rows = i + 1
           currentData = s.parse(line, i, currentData)
         }
-        expect(currentData.info[1].error).toEqual(undefined)
+        expect(currentData.info[1].error).toEqual("")
       })
     })
 

@@ -19,6 +19,7 @@
  * Reference: https://numpad.io/
  */
 // import {cloneDeep} from 'lodash.clonedeep' // crashes NP
+import columnify from 'columnify';
 import pluginJson from '../plugin.json'
 import { chooseOption, showMessage } from '../../helpers/userInput'
 import type { CodeBlock } from '../../helpers/codeBlocks'
@@ -62,7 +63,7 @@ export function formatOutput(results: Array<LineInfo>, formatTemplate: string = 
     return line
   })
   const formatted = resultsWithStringValues.map((line) => formatWithFields(formatTemplate, line))
-  logDebug(pluginJson, `Formatted data: ${JSON.stringify(resultsWithStringValues, null, 2)}`)
+  // logDebug(pluginJson, `Formatted data: ${JSON.stringify(resultsWithStringValues, null, 2)}`)
 
   return formatted
 }
@@ -110,27 +111,41 @@ export function removeAnnotations(note: CoreNoteFields, blockData: $ReadOnly<Cod
   if (updates.length) note.updateParagraphs(updates)
 }
 
-export function annotateResults(note: CoreNoteFields, blockData: $ReadOnly<CodeBlock>, results: Array<LineInfo>, template: string, totalsOnly: boolean): void {
+export function annotateResults(note: CoreNoteFields, blockData: $ReadOnly<CodeBlock>, results: Array<LineInfo>, template: string, mode: string): void {
+  const totalsOnly = mode === 'totalsOnly'
+  const debug = mode === 'debug'
   const formatted = formatOutput(results, template) // writes .value using template?
   removeAnnotations(note, blockData)
   const updates = []
   let j = 0
+  const debugOutput = []
   for (let i = 0; i < blockData.paragraphs.length; i++) {
     const paragraph = blockData.paragraphs[i]
     const solverData = results[j]
-    const shouldPrint = !totalsOnly || (totalsOnly && (solverData.typeOfResult === 'T' || solverData.typeOfResult === 'S'))
+    let shouldPrint = !totalsOnly || (totalsOnly && (solverData.typeOfResult === 'T' || solverData.typeOfResult === 'S'))
+    if (debug) {
+      shouldPrint = true
+      // Probably don't need to output error, because it's in value field: ${solverData.error.length ? ` err:"${solverData.error}"` : ''}
+      solverData.value = ` //= R${i}(${solverData.typeOfResult}): expr:"${solverData.expression}" lineValue:${solverData.lineValue} value:"${solverData.value}"`
+      // debugOutput.push(`R${String(i).padStart(2,'0')}(${solverData.typeOfResult}): orig:"${solverData.originalText}" expr:"${solverData.expression}" lineValue:${solverData.lineValue} value:"${solverData.value }"`)
+      debugOutput.push({row:`R${String(i)}`,typeOfResult:`${solverData.typeOfResult}`,originalText:`${solverData.originalText}`, expression:`${solverData.expression}`,lineValue:`${solverData.lineValue}`, value:`"${solverData.value }"`})
+    }
     if (solverData.value !== '' && shouldPrint) {
-      const comment = solverData.value ? `  ${solverData.value}` : ''
-      clo(solverData, `annotateResults solverData`)
-      logDebug(pluginJson, `$comment=${comment}`)
+      const comment = solverData.value ? ` ${solverData.value}` : '' //FIXME: add columns here
+      // clo(solverData, `annotateResults solverData`)
+      // logDebug(pluginJson, `$comment=${comment}`)
       const thisParaInNote = note.paragraphs[paragraph.lineIndex]
       // thisParaInNote.content.replace(/ {2}(\/\/\=.*)/g,'')
-      thisParaInNote.content += comment
+      thisParaInNote.content = thisParaInNote.content.trimEnd() + comment
       updates.push(thisParaInNote)
       // `    logDebug(`annotateResults: paragraph.lineIndex: ${paragraph.lineIndex} content="${paragraph.content}" results[].value=${solverData.value || ''}`)
       //      logDebug(`${paragraph.content}${comment}`)
     }
     j++
+  }
+  if (debugOutput.length && DataStore.settings._logLevel === "DEBUG") {
+    const columns = columnify(debugOutput) //options is a 2nd param
+    console.log(`\n\n${columns}\n\n`)
   }
   // clo(updates, `annotateResults::updates:`)
   if (updates.length) note.updateParagraphs(updates)
@@ -175,9 +190,9 @@ export function removeAllAnnotations(): void {
 /**
  * Generic math block processing function (can be called by calculate or totalsOnly)
  * @param {string} incoming - math block text to process
- * @param {boolean} totalsOnly - if true, only calculate totals (default: false)
+ * @param {boolean} mode - if empty, calculate normally, 'totalsOnly', only calculate totals, 'debug' - calculate with verbose debug output (default: '')
  */
-export async function calculateBlocks(incoming: string | null = null, totalsOnly: boolean = true, vars: any = {}): Promise<void> {
+export async function calculateBlocks(incoming: string | null = null, mode: string = '', vars: any = {}): Promise<void> {
   try {
     const { popUpTemplate, presetValues } = DataStore.settings
     // get the code blocks in the editor
@@ -214,7 +229,7 @@ export async function calculateBlocks(incoming: string | null = null, totalsOnly
         //   currentData = parse("total",i,currentData)
         // }
         // TODO: add user pref for whether to include total or not
-        await annotateResults(Editor, block, currentData.info, popUpTemplate, totalsOnly)
+        await annotateResults(Editor, block, currentData.info, popUpTemplate, mode)
         // await showResultsInPopup([totalLine,...currentData.info], popUpTemplate, `Block ${b+1}`)
       }
     } else {
@@ -234,7 +249,7 @@ export async function calculateBlocks(incoming: string | null = null, totalsOnly
  */
 export async function calculateEditorMathBlocks(incoming: string | null = null) {
   try {
-    await calculateBlocks(incoming, false, getFrontmatterVariables(Editor.content || ''))
+    await calculateBlocks(incoming, '', getFrontmatterVariables(Editor.content || ''))
   } catch (error) {
     logError(pluginJson, JSON.stringify(error))
   }
@@ -247,7 +262,7 @@ export async function calculateEditorMathBlocks(incoming: string | null = null) 
  */
 export async function calculateEditorMathBlocksTotalsOnly(incoming: string | null = null) {
   try {
-    await calculateBlocks(incoming, true, getFrontmatterVariables(Editor.content || ''))
+    await calculateBlocks(incoming, 'totalsOnly', getFrontmatterVariables(Editor.content || ''))
   } catch (error) {
     logError(pluginJson, JSON.stringify(error))
   }
@@ -285,5 +300,17 @@ export async function insertMathBlock() {
     }
   } catch (error) {
     logError(pluginJson, error)
+  }
+}
+
+/**
+ * Calculate Math Block with Verbose Debug Output
+ * Plugin entrypoint for "/Debug Math Calculations"
+ */
+export async function debugMath() {
+  try {
+    await calculateBlocks(null, 'debug', getFrontmatterVariables(Editor.content || ''))
+  } catch (error) {
+    logError(pluginJson, JSON.stringify(error))
   }
 }

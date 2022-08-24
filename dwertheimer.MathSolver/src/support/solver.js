@@ -24,7 +24,7 @@ export type LineInfo = {
   originalText: string,
   expression: string,
   row: number,
-  typeOfResult: string, //"H"|"N"|"S"|"T"|"A"|"E",
+  typeOfResult: string, //"H" (Heading/comment)|"N" (Number)|"S" (Subtotal)|"T" (Total)|"A" (Assignment) |"E" (Error)| "B" (Assignment of Total Line - A=total)
   typeOfResultFormat: string, //"N"|"%" /* Does not appear the % is ever used */,
   value?: string,
   error?: string,
@@ -131,7 +131,7 @@ function setRelation(selectedRow, presences, relations) {
 export function removeTextPlusColon(strToBeParsed) {
   const line = strToBeParsed.trim()
   const isTotal = /(sub)?total:/i.test(strToBeParsed) // allow total: or subtotal:
-  return isTotal ? strToBeParsed : strToBeParsed.replace(/^.*:/gm, '')
+  return isTotal ? strToBeParsed : strToBeParsed.replace(/^.*:/gm, '').trim()
 }
 
 function removeTextFromStr(strToBeParsed, variables) {
@@ -146,7 +146,7 @@ function removeTextFromStr(strToBeParsed, variables) {
 
 export function parse(thisLineStr: string, lineIndex: number, currentData: CurrentData): CurrentData {
   const pluginJson = 'solver::parse'
-  let strToBeParsed = thisLineStr
+  let strToBeParsed = thisLineStr.trim()
   const { info, variables, expressions, rows } = currentData
   let relations = currentData.relations // we need to be able to write this one
   // typeOfResult: H for header/comment, N per normal number line, S per subtotal, T per total, A for assignment
@@ -155,29 +155,30 @@ export function parse(thisLineStr: string, lineIndex: number, currentData: Curre
   const selectedRow = lineIndex
   info[selectedRow] = { row: selectedRow, typeOfResult: 'N', typeOfResultFormat: 'N', originalText: strToBeParsed, expression: '', lineValue: 0, error: '' }
 
+  // Remove comment+colon
+  strToBeParsed = removeTextPlusColon(strToBeParsed)
+
   // Remove comments/headers
   if (/(^|\s)#(.*)/g.test(strToBeParsed)) {
     strToBeParsed = strToBeParsed
       .replace(/(^|\s)#(.*)/g, '$1')
       .replace('\t', '')
       .trim() // remove anything beyond double slashes
-    info[selectedRow].typeOfResult = strToBeParsed === '' ? 'H' : 'N'
   } else if (/\/\/(.*)/g.test(strToBeParsed)) {
     strToBeParsed = strToBeParsed.replace(/\/\/(.*)/g, '').trim() // remove anything beyond double slashes
   }
-
-  // Remove comment+colon
-  strToBeParsed = removeTextPlusColon(strToBeParsed)
+  info[selectedRow].typeOfResult = strToBeParsed.trim() === '' ? 'H' : 'N'
+  logDebug(pluginJson,`str="${strToBeParsed}" = ${info[selectedRow].typeOfResult}`)
 
   let preProcessedValue = null
   try {
     const results = math.evaluate([strToBeParsed], variables)
-    clo(results, `math.js pre-process success on: "${strToBeParsed}" Array<${typeof results[0]}> =`)
+    clo(results, `solver::parse math.js pre-process success on: "${strToBeParsed}" Array<${typeof results[0]}> =`)
     preProcessedValue = results[0]
   } catch (error) {
     // errors are to be expected since we are pre-processing
     // error messages: "Undefined symbol total", "Unexpected part "4" (char 7)"
-    logDebug(pluginJson, `math.js pre-process failed on "${strToBeParsed}" with message: "${error.message}"`)
+    logDebug(pluginJson, `math.js pre-process FAILED on "${strToBeParsed}" with message: "${error.message}"`)
   }
 
   // Look for passthroughs (quoted or square brackets)
@@ -201,7 +202,7 @@ export function parse(thisLineStr: string, lineIndex: number, currentData: Curre
         if (info[i].typeOfResult === 'N') {
           out += `+ R${i}`
           // H for header, S per subtotal, T per total
-        } else if (info[i].typeOfResult === 'S' || info[i].typeOfResult === 'T') {
+        } else if (info[i].typeOfResult === 'S' || info[i].typeOfResult === 'T' || info[i].typeOfResult === 'B') {
           break
         }
       }
@@ -221,6 +222,7 @@ export function parse(thisLineStr: string, lineIndex: number, currentData: Curre
             strToBeParsed = strToBeParsed.replace(match[0], `${match[1]} = ${out}`)
           }
         }
+        info[selectedRow].typeOfResult = 'B' // for Assign-Equal-(sub)Total
       } else {
         strToBeParsed = out // build the string for the totals
       }
@@ -245,7 +247,9 @@ export function parse(thisLineStr: string, lineIndex: number, currentData: Curre
     while ((match = reAssignmentSides.exec(strToBeParsed))) {
       // logDebug(`solver::parse/assignment`,`strToBeParsed="${strToBeParsed}"; matches = ${match.toString()}`)
       if (match[1]?.trim() !== '' && match[2]?.trim() !== '') {
-        info[selectedRow].typeOfResult = 'A'
+        if (info[selectedRow].typeOfResult !== "B") {
+          info[selectedRow].typeOfResult = 'A' 
+        }
         variables[match[1]] = match[2]
       } else {
         // incomplete assigments (e.g. in progress) will be ignored
@@ -311,16 +315,19 @@ export function parse(thisLineStr: string, lineIndex: number, currentData: Curre
     const results = math.evaluate(expressions, variables)
     // results.map((e, i) => variables[`R${i}`] = checkIfUnit(e) ? math.unit(e) : e)  // you put the row results in the variables
     results.map((e, i) => {
-      clo(expressions[i], `parse:expressions[i]`)
+      // clo(expressions[i], `parse:expressions[${i}]`)
       const rounded = Number(math.format(e, { precision: 14 }))
       variables[`R${i}`] = checkIfUnit(e) ? math.unit(e) : isNaN(rounded) ? e : rounded
       info[i].lineValue = variables[`R${i}`]
-      info[i].expression = expressions[i]
       if (info[i].typeOfResult === 'N' && mathOnlyStr.trim() === '' && info[i].expression === '0') {
-        // logDebug(`solver::parse`,`R${i}: "${info[i].originalText}" is a number; info[i].typeOfResult=${info[i].typeOfResult} expressions[i]=${expressions[i]}`)
+        logDebug(`solver::parse`,`R${i}: "${info[i].originalText}" is a number; info[i].typeOfResult=${info[i].typeOfResult} expressions[i]=${expressions[i]}`)
         if (info[i].originalText.trim() !== '') {
           info[i].error = `was not a number, equation, variable or comment`
+          info[i].typeOfResult === 'H' // remove it from calculations
         }
+        info[i].expression = ""
+      } else {
+        info[i].expression = expressions[i]
       }
     }) // keep for NP output metadata
     let data = { info, variables, relations, expressions, rows }
@@ -332,9 +339,10 @@ export function parse(thisLineStr: string, lineIndex: number, currentData: Curre
   } catch (error) {
     // createOrUpdateResult('')
     console.log(`Error completing expression in: ${String(expressions)} ${error}`)
+    clo(expressions && expressions.length ? expressions : {},`parse--expressions`)
     info[selectedRow].error = error.toString()
     info[selectedRow].typeOfResult = 'E'
-    expressions[selectedRow] = null
+    expressions[selectedRow] = ''
     return { info, variables, relations, expressions, rows }
   }
 }
