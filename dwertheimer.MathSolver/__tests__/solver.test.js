@@ -4,7 +4,7 @@
 import * as s from '../src/support/solver'
 
 describe('dwertheimer.MathSolver' /* pluginID */, () => {
-  describe('helpers/solver' /* file */, () => {
+  describe('support/solver' /* file */, () => {
     /*
      * parse()
      */

@@ -16,7 +16,7 @@
 /**
  * Parsed line metadata
  * {string} typeOfResult: H for header/comment, N per normal number line, S per subtotal, T per total, A for assignment, E for Error
- * {string} typeOfResultFormat: N for normal, % for percentage
+ * {string} typeOfResultFormat: N for normal, % for percentage, B for assigned total (A=total)
  */
 
 export type LineInfo = {
@@ -26,6 +26,7 @@ export type LineInfo = {
   row: number,
   typeOfResult: string, //"H" (Heading/comment)|"N" (Number)|"S" (Subtotal)|"T" (Total)|"A" (Assignment) |"E" (Error)| "B" (Assignment of Total Line - A=total)
   typeOfResultFormat: string, //"N"|"%" /* Does not appear the % is ever used */,
+  complete: boolean,
   value?: string,
   error?: string,
 }
@@ -88,32 +89,42 @@ export function removeParentheticals(inString: string): [string, Array<string>] 
   return [quotedContent.length ? quotedContent : [], newStr]
 }
 
+/**
+ * Is line type included in the array?
+ * @param {line} - the info line to search in
+ * @param {string|Array<string>} - the type to compare against
+ */
+export function isLineType(line:LineInfo,searchForType:string|Array<string>) {
+  const lineTypes = Array.isArray(searchForType) ? searchForType : [searchForType]
+  return (lineTypes.indexOf(line.typeOfResult) > -1)
+}
+
 function checkIfUnit(obj) {
   return typeof obj === 'object' && obj !== null && obj.value
 }
 
 // update each line according to the presence of the variables present in 'relations'
-function updateRelated(data) {
-  for (let numRow = 0; numRow < data.rows; numRow++) {
-    // for all the rows you see those that include the variables in the relationships
-    const who = data.relations.map((e) => e && (e.includes(`R${numRow}`) || Object.keys(data.variables).findIndex((a) => a === e) > -1)) // FIXME: to be reviewed...
-    if (who && who.length > 0) {
-      who.forEach((element) => {
-        if (element) {
-          try {
-            const results = math.evaluate(data.expressions, data.variables)
-            results.map((e, i) => (data.variables[`R${i}`] = checkIfUnit(e) ? math.unit(e) : e)) // put the row results in the variables
-            // updateResultInRow(results[index] ? formatResults(results[index]) : '', index)  // the current row is updated
-          } catch (error) {
-            // updateResultInRow('', index)
-            console.log('Completing expression', error)
-          }
-        }
-      })
-    }
-  }
-  return data
-}
+// function updateRelated(data) {
+//   for (let numRow = 0; numRow < data.rows; numRow++) {
+//     // for all the rows you see those that include the variables in the relationships
+//     const who = data.relations.map((e) => e && (e.includes(`R${numRow}`) || Object.keys(data.variables).findIndex((a) => a === e) > -1)) // FIXME: to be reviewed...
+//     if (who && who.length > 0) {
+//       who.forEach((element) => {
+//         if (element) {
+//           try {
+//             const results = math.evaluate(data.expressions, data.variables)
+//             results.map((e, i) => (data.variables[`R${i}`] = checkIfUnit(e) ? math.unit(e) : e)) // put the row results in the variables
+//             // updateResultInRow(results[index] ? formatResults(results[index]) : '', index)  // the current row is updated
+//           } catch (error) {
+//             // updateResultInRow('', index)
+//             console.log('Completing expression', error)
+//           }
+//         }
+//       })
+//     }
+//   }
+//   return data
+// }
 
 // assegna ad ogni riga le variabili presenti
 /*
@@ -128,8 +139,7 @@ function setRelation(selectedRow, presences, relations) {
   return relations
 }
 
-export function removeTextPlusColon(strToBeParsed) {
-  const line = strToBeParsed.trim()
+export function removeTextPlusColon(strToBeParsed: string): string {
   const isTotal = /(sub)?total:/i.test(strToBeParsed) // allow total: or subtotal:
   return isTotal ? strToBeParsed : strToBeParsed.replace(/^.*:/gm, '').trim()
 }
@@ -144,36 +154,50 @@ function removeTextFromStr(strToBeParsed, variables) {
     .replace(/\&;/g, '')
 }
 
-export function parse(thisLineStr: string, lineIndex: number, currentData: CurrentData): CurrentData {
+function removeComments (incomingString:string,currentData:CurrentData,selectedRow:number):string {
+  let strToBeParsed = incomingString
+  if (currentData.info[selectedRow].complete !== true) {
+    // Remove comment+colon
+    strToBeParsed = removeTextPlusColon(strToBeParsed)
+    if (/(^|\s)#(.*)/g.test(strToBeParsed)) {
+      strToBeParsed = strToBeParsed
+        .replace(/(^|\s)#(.*)/g, '$1')
+        .replace('\t', '')
+        .trim() // remove anything beyond double slashes
+    } else if (/\/\/(.*)/g.test(strToBeParsed)) {
+      strToBeParsed = strToBeParsed.replace(/\/\/(.*)/g, '').trim() // remove anything beyond double slashes
+    }
+    if (strToBeParsed.trim() === '') {
+      currentData.info[selectedRow].typeOfResult =  'H'
+      currentData.info[selectedRow].complete = true
+    }
+     // logDebug(pluginJson,`str="${strToBeParsed}" = ${info[selectedRow].typeOfResult}`)
+    // edit outStr & set .complete if finished
+  }
+  return strToBeParsed
+}
+
+export function parse(thisLineStr: string, lineIndex: number, cd: CurrentData): CurrentData {
+  const currentData = cd
   const pluginJson = 'solver::parse'
   let strToBeParsed = thisLineStr.trim()
   const { info, variables, expressions, rows } = currentData
-  let relations = currentData.relations // we need to be able to write this one
-  // typeOfResult: H for header/comment, N per normal number line, S per subtotal, T per total, A for assignment
-  // typeOfResultFormat: N per noraml, % per percentage
+  // let relations = currentData.relations // we need to be able to write this one
   let match
   const selectedRow = lineIndex
-  info[selectedRow] = { row: selectedRow, typeOfResult: 'N', typeOfResultFormat: 'N', originalText: strToBeParsed, expression: '', lineValue: 0, error: '' }
+  currentData.info[selectedRow] = { row: selectedRow, typeOfResult: 'N', typeOfResultFormat: 'N', originalText: strToBeParsed, expression: '', lineValue: 0, error: '', complete: false }
 
-  // Remove comment+colon
-  strToBeParsed = removeTextPlusColon(strToBeParsed)
-
-  // Remove comments/headers
-  if (/(^|\s)#(.*)/g.test(strToBeParsed)) {
-    strToBeParsed = strToBeParsed
-      .replace(/(^|\s)#(.*)/g, '$1')
-      .replace('\t', '')
-      .trim() // remove anything beyond double slashes
-  } else if (/\/\/(.*)/g.test(strToBeParsed)) {
-    strToBeParsed = strToBeParsed.replace(/\/\/(.*)/g, '').trim() // remove anything beyond double slashes
-  }
-  info[selectedRow].typeOfResult = strToBeParsed.trim() === '' ? 'H' : 'N'
-  logDebug(pluginJson,`str="${strToBeParsed}" = ${info[selectedRow].typeOfResult}`)
+  // Remove comments/headers $FlowIgnore
+  strToBeParsed = removeComments(strToBeParsed,currentData,selectedRow) //FIXME: every function checks for .calculated 
 
   let preProcessedValue = null
   try {
+    logDebug(pluginJson,`---`)
+    logDebug(pluginJson,`about to preproc str = "${strToBeParsed}"`)
+    clo(currentData,`currentData before pre-process`)
+    logDebug(pluginJson,`str = now will pre-proc "${strToBeParsed}"`)
     const results = math.evaluate([strToBeParsed], variables)
-    clo(results, `solver::parse math.js pre-process success on: "${strToBeParsed}" Array<${typeof results[0]}> =`)
+    clo(results, `solver::parse math.js pre-process success on: "${strToBeParsed}" Result is Array<${typeof results[0]}> =`)
     preProcessedValue = results[0]
   } catch (error) {
     // errors are to be expected since we are pre-processing
@@ -309,7 +333,7 @@ export function parse(thisLineStr: string, lineIndex: number, currentData: Curre
   if (Array.isArray(presences) && presences.length > 0) presences = presences.filter((f) => f !== '')
   expressions[selectedRow] = mathOnlyStr.replace(/^0\+/g, '').trim() || '0' // it removes the 0+ fix sums with units
   // logDebug(`solver::parse Relations:`,relations)
-  relations = setRelation(selectedRow, presences, relations)
+  // relations = setRelation(selectedRow, presences, relations)
 
   try {
     const results = math.evaluate(expressions, variables)
@@ -330,11 +354,11 @@ export function parse(thisLineStr: string, lineIndex: number, currentData: Curre
         info[i].expression = expressions[i]
       }
     }) // keep for NP output metadata
-    let data = { info, variables, relations, expressions, rows }
+    // let data = { info, variables, relations, expressions, rows }
     // data = updateRelated(data)
     //    logDebug(`solver::parse`,`Returning (one-line):\n${JSON.stringify(data)}`)
     //    logDebug(`solver::parse`,`Returning (Pretty):\n${JSON.stringify(data,null,2)}`)
-    return data
+    return currentData // all variables inside have been updated because the desctructuring just creates references
     // createOrUpdateResult(results[selectedRow] ? formatResults(results[selectedRow]) : '') // the current row is updated
   } catch (error) {
     // createOrUpdateResult('')
@@ -343,7 +367,7 @@ export function parse(thisLineStr: string, lineIndex: number, currentData: Curre
     info[selectedRow].error = error.toString()
     info[selectedRow].typeOfResult = 'E'
     expressions[selectedRow] = ''
-    return { info, variables, relations, expressions, rows }
+    return currentData
   }
 }
 

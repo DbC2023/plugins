@@ -1,8 +1,15 @@
 // @flow
 /**
  * TODO:
- * add output columns https://www.npmjs.com/package/columnify (showColumns fa;se)
+ * why doesn't dollars work? $2 + $4
+ * what to do about commas
+ * separate date-time math
+ * as you calculate and recalculate, seems to cycle between totals and non-totals
  * refactor to make more modular and eliminate relations and one of the each-line-loops
+ * maybe print zero in output on subtotal or total lines only
+ * time-date math per George: https://discord.com/channels/763107030223290449/1009525907075113053/1012085619658334351 and 
+ *  - https://documentation.soulver.app/syntax-reference/dates-and-times
+ *  - https://documentation.soulver.app/whats-new
  * 2) would be so cool if  @Eduard could tweak autocomplete inside a math block to give you choices of variables without you having to type them in.
  * - Allow for statements inside parens
  *  - make "at" and "per" work properly
@@ -11,19 +18,21 @@
  * - implement insertResultsAtCursor
  * - add user pref for whether to include total or not
  * - the second total prints at the bottom (need a cloneDeep to work)
+ * (done) add output columns https://www.npmjs.com/package/columnify (showColumns fa;se)
  * (done) Nested frontmatter under mathPresets
  * (done) Can you assign a subtotal line to a variable? @george65#1130
  * (done) save variables you use frequently in preferences and reference them without defining them every time
  * (done) pricePerHour = 20  //= 20 (does not need to print this out)
  * (done) ignore date on left
  * Reference: https://numpad.io/
+ * Playground: https://mathnotepad.com/
  */
 // import {cloneDeep} from 'lodash.clonedeep' // crashes NP
-import columnify from 'columnify';
+import columnify from 'columnify'
 import pluginJson from '../plugin.json'
 import { chooseOption, showMessage } from '../../helpers/userInput'
 import type { CodeBlock } from '../../helpers/codeBlocks'
-import { type LineInfo, parse } from './support/solver'
+import { type LineInfo, parse, isLineType } from './support/solver'
 import { getParagraphContainingPosition } from '@helpers/NPParagraph'
 import { log, logDebug, logError, logWarn, clo, JSP } from '@helpers/dev'
 import { createRunPluginCallbackUrl, formatWithFields } from '@helpers/general'
@@ -54,10 +63,11 @@ export function getFrontmatterVariables(noteContent: string): any {
 export function formatOutput(results: Array<LineInfo>, formatTemplate: string = '{{originalText}} {{value}}'): Array<string> {
   const resultsWithStringValues = results.map((line) => {
     const isPctOf = /(\d*[\.,])?(\d+\s?)(as|as a)?(\s*%)(\s+(of)\s+)(\d*[\.,])?(\d+\s?)/g.test(line.originalText)
-    const isZero = line.lineValue === 0
+    const isZero = line.lineValue === 0 && isLineType(line,["N","S","T"]) // && !/total/i.test(line.originalText)
     const isNotCalc = String(line.lineValue) === line.expression && !isPctOf
     const isNumericalAssignment = line.typeOfResult === 'A' && !/(\+|\-|\*|\/)+/.test(line.originalText)
-    line.value = isZero || isNotCalc || isNumericalAssignment ? '' : `//= ${String(line.lineValue)}` // eslint-disable-line eqeqeq
+    const isUndefined = (line.lineValue === undefined)
+    line.value = isZero || isNotCalc || isNumericalAssignment || isUndefined ? '' : `//= ${String(line.lineValue)}` // eslint-disable-line eqeqeq
     if (line.error) line.value += ` //= ${line.error}`
     // logDebug(pluginJson, `line.value: ${line.value} line.expression: ${line.expression}`)
     return line
@@ -103,25 +113,30 @@ export function removeAnnotations(note: CoreNoteFields, blockData: $ReadOnly<Cod
   for (let i = 0; i < blockData.paragraphs.length; i++) {
     const paragraph = blockData.paragraphs[i]
     if (/(\/\/\=.*)/g.test(paragraph.content)) {
-      const thisParaInNote = note.paragraphs[paragraph.lineIndex]
-      thisParaInNote.content = thisParaInNote.content.replace(/(\/\/\=.*)/g, '')
-      updates.push(thisParaInNote)
+      // const thisParaInNote = note.paragraphs[paragraph.lineIndex]
+      paragraph.content = paragraph.content.replace(/(\/\/\=.*)/g, '').trimEnd()
     }
+    paragraph.content = paragraph.content.trimEnd()
+    updates.push(paragraph)
   }
   if (updates.length) note.updateParagraphs(updates)
 }
 
 export function annotateResults(note: CoreNoteFields, blockData: $ReadOnly<CodeBlock>, results: Array<LineInfo>, template: string, mode: string): void {
+  const {columnarOutput} = DataStore.settings
+  logDebug(pluginJson,`mode=${mode}`)
   const totalsOnly = mode === 'totalsOnly'
   const debug = mode === 'debug'
   const formatted = formatOutput(results, template) // writes .value using template?
-  removeAnnotations(note, blockData)
   const updates = []
   let j = 0
   const debugOutput = []
+  const outputObjects = []
   for (let i = 0; i < blockData.paragraphs.length; i++) {
+    const li = blockData.paragraphs[i].lineIndex
     const paragraph = blockData.paragraphs[i]
     const solverData = results[j]
+    paragraph.content = paragraph.content.replace(/(\/\/\=.*)/g, '').trimEnd() //clean every line
     let shouldPrint = !totalsOnly || (totalsOnly && (solverData.typeOfResult === 'T' || solverData.typeOfResult === 'S'))
     if (debug) {
       shouldPrint = true
@@ -131,24 +146,41 @@ export function annotateResults(note: CoreNoteFields, blockData: $ReadOnly<CodeB
       debugOutput.push({row:`R${String(i)}`,typeOfResult:`${solverData.typeOfResult}`,originalText:`${solverData.originalText}`, expression:`${solverData.expression}`,lineValue:`${solverData.lineValue}`, value:`"${solverData.value }"`})
     }
     if (solverData.value !== '' && shouldPrint) {
-      const comment = solverData.value ? ` ${solverData.value}` : '' //FIXME: add columns here
+      const comment = solverData.value ? ` ${solverData.value}` : '' 
       // clo(solverData, `annotateResults solverData`)
       // logDebug(pluginJson, `$comment=${comment}`)
-      const thisParaInNote = note.paragraphs[paragraph.lineIndex]
+      // const thisParaInNote = note.paragraphs[paragraph.lineIndex]
       // thisParaInNote.content.replace(/ {2}(\/\/\=.*)/g,'')
-      thisParaInNote.content = thisParaInNote.content.trimEnd() + comment
-      updates.push(thisParaInNote)
+      if (columnarOutput) {
+        outputObjects.push({content:paragraph.content.trimEnd(),comment})
+      } else {
+        paragraph.content = paragraph.content.trimEnd() + comment
+      }
       // `    logDebug(`annotateResults: paragraph.lineIndex: ${paragraph.lineIndex} content="${paragraph.content}" results[].value=${solverData.value || ''}`)
       //      logDebug(`${paragraph.content}${comment}`)
+    } else {
+      if (columnarOutput) {
+        outputObjects.push({content:paragraph.content.trimEnd(),comment:''})
+      }
     }
     j++
   }
+  if (columnarOutput) {
+    // clo(blockData.paragraphs,`blockData.paragraphs`)
+  const formattedColumnarOutput = columnify(outputObjects)
+  formattedColumnarOutput.split("\n").slice(1).forEach((line,i)=>{
+    blockData.paragraphs[i].content = line
+  })
+  clo(formattedColumnarOutput,`annotateResults::formattedColumnarOutput\n`)
+  }
   if (debugOutput.length && DataStore.settings._logLevel === "DEBUG") {
     const columns = columnify(debugOutput) //options is a 2nd param
-    console.log(`\n\n${columns}\n\n`)
+    console.log(`\n\n${columns}\nDebug Output:\n`)
   }
   // clo(updates, `annotateResults::updates:`)
-  if (updates.length) note.updateParagraphs(updates)
+  // if (updates.length) note.updateParagraphs(blockData.paragraphs)
+  note.updateParagraphs(blockData.paragraphs)
+
 }
 
 /**
@@ -175,14 +207,14 @@ export async function showResultsInPopup(results: Array<LineInfo>, template: str
  * (plugin entrypoint for command: /Remove Annotations from Active Document)
  * @returns {void}
  */
-export function removeAllAnnotations(): void {
+export  function removeAllAnnotations(): void {
   if (Editor) {
     const codeBlocks = getCodeBlocksOfType(Editor, 'math')
     const note = Editor
     if (!note) return
     for (let i = 0; i < codeBlocks.length; i++) {
       const blockData = codeBlocks[i]
-      removeAnnotations(note, blockData)
+       removeAnnotations(note, blockData)
     }
   }
 }
@@ -196,6 +228,7 @@ export async function calculateBlocks(incoming: string | null = null, mode: stri
   try {
     const { popUpTemplate, presetValues } = DataStore.settings
     // get the code blocks in the editor
+    await removeAllAnnotations()
     let codeBlocks = incoming === '' || incoming === null ? getCodeBlocksOfType(Editor, `math`) : [{ type: 'unknown', code: incoming, startLineIndex: -1 }]
     logDebug(pluginJson, `calculateEditorMathBlocks: codeBlocks.length: ${codeBlocks.length}`)
     if (codeBlocks.length && Editor) {
@@ -205,6 +238,7 @@ export async function calculateBlocks(incoming: string | null = null, mode: stri
           codeBlocks = getCodeBlocksOfType(Editor, `math`)
         }
         const block = codeBlocks[b]
+        // removeAnnotations(Editor, block) //FIXME: MAYBE put this back, especially for non-columnar output
         // clo(block,`calculateEditorMathBlocks block=`)
         let currentData = { info: [], variables: { ...presetValues, ...vars }, relations: [], expressions: [], rows: 0 }
         block.code.split('\n').forEach((line, i) => {
@@ -224,7 +258,7 @@ export async function calculateBlocks(incoming: string | null = null, mode: stri
           error: '',
         }
         // logDebug(pluginJson,`Final data: ${JSON.stringify(currentData,null,2)}`)
-        // TODO: Maybe add a total if there isn't one? But maybe people are not adding?
+        // TODO: Maybe add a total if there isn't one? But maybe  people are not adding?
         // if (currentData.info[currentData.info.length-1].typeOfResult !== "T") {
         //   currentData = parse("total",i,currentData)
         // }

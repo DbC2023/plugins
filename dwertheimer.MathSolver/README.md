@@ -63,6 +63,8 @@ Assignment operations store values in named variables, e.g.
             `taxRate` or `20 * taxRate` 
         - Always use the ` = ` to assign to a variable. Text like: ` taxrate: 20% ` does not do variable assignment
 
+**Note**: Variables must not contain spaces (one block of characters)
+
 ### Preset variables
 
 If there are variables you want to use over and over again in different documents, you can save them in the "Preset Variables" field in this plugin's preferences. Those variables will then be available to you by name in any Math Block.

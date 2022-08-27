@@ -4,6 +4,12 @@
 
 See Plugin [README](https://github.com/NotePlan/plugins/blob/main/dwertheimer.MathSolver/README.md) for details on available commands and use case.
 
+## [1.0.9] - 2022-08-24 (@dwertheimer)
+- Fix for calculation output not consistently showing
+
+## [1.0.8] - 2022-08-23 (@dwertheimer)
+- Add columnar output option
+
 ## [1.0.7] - 2022-08-23 (@dwertheimer)
 - Trap for syntax errors and display errors
 
