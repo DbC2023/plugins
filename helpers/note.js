@@ -486,32 +486,44 @@ export function removeSection(note: TNote, headingOfSectionToRemove: string): nu
  * @param {TNote} note
  * @param {boolean} openOnly - restrict function to only open tasks
  * @param {boolean} plusOnlyTypes - limit function to only >date+ tags (do not include normal overdue dates)
+ * @param {boolean} replaceDate - replace the due date with a >today (otherwise leave the date for posterity)
  * @returns {Array<TParagraph>} list of paragraphs with updated content
  */
-export function convertOverdueTasksToToday(note: TNote, openOnly: boolean = true, plusOnlyTypes: boolean = true): Array<TParagraph> {
+export function convertOverdueTasksToToday(note: TNote, openOnly: boolean = true, plusOnlyTypes: boolean = true, replaceDate: boolean = true): Array<TParagraph> {
   const RE_PLUS_DATE = />(\d{4}-\d{2}-\d{2})(\+)*/g
   const todayHyphenated = hyphenatedDateString(new Date())
   const updatedParas = []
   const datedOpenTodos = openOnly ? note?.datedTodos?.filter((t) => t.type === 'open') || [] : note?.datedTodos || []
   datedOpenTodos.forEach((todo) => {
-    const datePlusAll = [...todo?.content?.matchAll(RE_PLUS_DATE)]
-    clo(datePlusAll, `convertOverdueTasksToToday datePlus before sort=\n`)
-    const sorted = sortListBy(datePlusAll, '1')
-    clo(datePlusAll, `convertOverdueTasksToToday datePlus after sort=\n`)
-
-    datePlusAll.forEach((datePlus, i) => {
-      clo(datePlus, `convertOverdueTasksToToday datePlus=`)
-      if (datePlus?.length === 3) {
-        const [fullDate, isoDate, operator] = datePlus
-        // logDebug(`note/convertOverdueTasksToToday`, `fullDate: ${fullDate} isoDate: ${isoDate} todayHyph: ${todayHyphenated} operator: ${operator}`)
-        if (todayHyphenated >= isoDate && (plusOnlyTypes === false || (plusOnlyTypes === true && operator === '+'))) {
-          logDebug(`note/convertOverdueTasksToToday`, `type: ${todo.type} fullDate: ${fullDate} isoDate: ${isoDate} operator: ${operator}`)
-          todo.content = todo.content.replace(fullDate, `>today`)
-          // logDebug(`note/convertOverdueTasksToToday`, `plus date found: ${fullDate} | New content: ${todo.content}`)
-          updatedParas.push(todo)
+    if (!/>today/i.test(todo.content)) {
+      const datePlusAll = [...todo?.content?.matchAll(RE_PLUS_DATE)] //there could be multiple dates on a line
+      const sorted = sortListBy(datePlusAll, '-1') // put the latest date at the top
+      let madeChange = false
+      sorted.forEach((datePlus, i) => {
+        if (datePlus?.length === 3) {
+          const [fullDate, isoDate, operator] = datePlus
+          // Date+ should be converted starting today, but overdue should start tomorrow
+          const pastDue = (operator && todayHyphenated >= isoDate) || todayHyphenated > isoDate
+          // logDebug(`note/convertOverdueTasksToToday`, `fullDate: ${fullDate} isoDate: ${isoDate} todayHyph: ${todayHyphenated} operator: ${operator}`)
+          if (pastDue && (plusOnlyTypes === false || (plusOnlyTypes === true && operator === '+'))) {
+            // logDebug(`note/convertOverdueTasksToToday`, `type: ${todo.type} fullDate: ${fullDate} isoDate: ${isoDate} operator: ${operator}`)
+            if (operator || (pastDue && i === 0)) {
+              const replacement = madeChange ? '' : ` >today` //if there are multiple dates and we already have one >today, eliminate the rest
+              if (operator) {
+                todo.content = replaceDate ? todo.content.replace(` ${fullDate}`, replacement) : todo.content.replace(` ${fullDate}`, ` >${isoDate}${replacement}`)
+              } else {
+                todo.content = replaceDate ? todo.content.replace(` ${fullDate}`, replacement) : `${todo.content}${replacement}`
+              }
+              // logDebug(`note/convertOverdueTasksToToday`, `plus date found: ${fullDate} | New content: ${todo.content}`)
+              if (madeChange === false) updatedParas.push(todo)
+              madeChange = true
+            }
+          }
         }
-      }
-    })
+      })
+    } else {
+      // do not return a task already marked with a >todo
+    }
   })
   return updatedParas
 }

@@ -1,6 +1,6 @@
 # Task Automations plugin
 
-### About
+## About
 
 This plugin helps you deal with tasks in the open document in the Editor. Major functions:
 
@@ -12,11 +12,19 @@ This plugin helps you deal with tasks in the open document in the Editor. Major 
 
 ## Overdue Tasks
 
+### Command `/Review overdue tasks (by Note)`
+
+Find all overdue tasks (tasks which have a >date earlier than yesterday, and change those tasks to have a [>today](https://help.noteplan.co/article/139-workflow-for-daily-recurring-tasks-using-today) tag. After that tag is applied, the task will show up in References of your Daily Note until the task is marked complete).
+
+### Command `/Review overdue tasks (by Task)`
+
+Same as `/Review overdue tasks (by Note)` but skip the Note-level review and review each overdue task invidually
+
 ## >Date+ tags
 
-Sometimes you want to set a >date at which you want something to become a `> today` task rather than tagging it `today` right now. To do this, create a todo and tag it with some date in the future and put a "+" at the end of the date (e.g. >2025-01-01+). This task will show up in your references section on that date, and if you run the command: `/Update >date+ (Date-Plus) tags in Notes` each day, you will convert those tasks from that day forward as `>today` (with user input along the way). The easiest way to do this is to run this command within your Daily Note template, e.g.:
+Sometimes you want to set a >date at which you want something to become a `>today` task rather than tagging it `today` right now. To do this, create a todo and tag it with some date in the future and put a "+" at the end of the date (e.g. >2025-01-01+). This task will show up in your references section on that date, and if you run the command: `/Update >date+ (Date-Plus) tags in Notes` each day, you will convert those tasks from that day forward as `>today` (with user input along the way). The easiest way to do this is to run this command within your Daily Note template, e.g.:
 
-```
+```text
 To run with user verification/input:
 <% await DataStore.invokePluginCommandByName("Update >date+ (Date-Plus) tags in Notes","dwertheimer.TaskAutomations",[])  -%>
 
@@ -32,7 +40,7 @@ This plugin will sort your tasks in the open note in the Editor interactively so
 
 When you run /ts, it will sort the tasks into task types (open|scheduled|completed|cancelled), and it will ask you how you want to sort within those categories and whether you want the output to have the category type headings or not, e.g.:
 
-```
+```text
 #### Open Tasks
   - [ ] Open Task
 #### Scheduled Tasks
