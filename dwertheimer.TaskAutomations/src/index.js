@@ -3,6 +3,7 @@ export { default as sortTasks, sortTasksByPerson, sortTasksByTag, sortTasksByDue
 export { default as markTasks } from './markTasks'
 export { taskSync } from './taskSync'
 export { copyTagsFromLineAbove, copyTagsFromHeadingAbove, copyLineForEachMention, copyLineForEachHashtag } from './tagTasks'
+export { updateDatePlusTags, updateAllOverdueTasks} from './overdue'
 export { openIncompleteLinksInNote, openURLOnLine } from './NPOpenLinks'
 import pluginJson from '../plugin.json'
 import { clo } from '@helpers/dev'
