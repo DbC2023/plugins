@@ -1,8 +1,8 @@
 // @flow
 
 import pluginJson from '../plugin.json'
+import { findNotesWithOverdueTasksAndMakeToday } from './NPTaskScanAndProcess'
 import { JSP, clo, log, logError, logWarn, logDebug } from '@helpers/dev'
-import { findNotesWithOverdueTasksAndMakeToday } from '@helpers/NPnote'
 import { chooseFolder } from '@helpers/userInput'
 
 /**
