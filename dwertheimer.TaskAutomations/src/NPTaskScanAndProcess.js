@@ -4,29 +4,75 @@ const pluginJson = '../plugin.json'
 import { getDateOptions } from '@helpers/dateTime'
 import { log, logError, logDebug, timer, clo } from '@helpers/dev'
 import { convertOverdueTasksToToday, RE_PLUS_DATE } from '@helpers/note'
-import { chooseOption } from '@helpers/userInput'
+import { chooseOption, showMessage } from '@helpers/userInput'
 
-async function processLineClick(origPara: TParagraph, updatedPara: TParagraph): Promise<{ action: string, changed?: TParagraph }> {
-  logDebug(pluginJson, `processLineClick "${origPara.note?.title || ''}": "${origPara.content || ''}"`)
-  const range = origPara.contentRange
-  if (origPara?.note?.filename) await Editor.openNoteByFilename(origPara.note.filename, false, range?.start || 0, range?.end || 0)
-  const content = origPara?.content || ''
+type OverdueSearchOptions = {
+  openOnly: boolean,
+  foldersToIgnore: Array<string>,
+  datePlusOnly: boolean,
+  confirm: boolean,
+  showUpdatedTask: boolean,
+  showNote: boolean,
+  replaceDate: boolean,
+  singleNote: ?boolean,
+  noteFolder: ?string | false,
+}
+
+type RescheduleUserAction = '__yes__' | '__mark__' | '__canceled__' | '__remove__' | '__skip__' | '__xcl__' | string /* >dateOptions */ | number /* lineIndex of item to pop open */
+
+/**
+ * Get shared CommandBar options to be displayed for both full notes or individual tasks
+ * @param {TPara} origPara
+ * @param {boolean} isSingleLine
+ * @returns {$ReadOnlyArray<{ label: string, value: string }>} the options for feeding to a command bar
+ */
+function getSharedOptions(origPara: TParagraph | { note: TNote }, isSingleLine: boolean): $ReadOnlyArray<{ label: string, value: string }> {
   const dateOpts = getDateOptions()
-  // clo(dateOpts, `processLineClick dateOpts`)
-  const opts = [
-    { label: `✏️ Edit this task in note: "${origPara.note?.title || ''}"`, value: '__edit__' },
-    { label: `> Change this task to >today (repeating until complete)`, value: '__yes__' },
-    { label: `✓ Mark this task complete`, value: '__mark__' },
-    { label: `🙅‍♂️ Mark this task cancelled`, value: '__canceled__' },
-    { label: `❌ Skip - Do not change "${content}" (and continue)`, value: '__no__' },
+  // clo(dateOpts, `getUserLineAction dateOpts`)
+  const note = origPara.note
+  const taskText = isSingleLine ? `this task` : `the above tasks`
+  const contentText = isSingleLine ? `"${origPara?.content || ''}"` : `tasks in "${note?.title || ''}"`
+  return [
+    { label: `> Change ${taskText} to >today (repeating until complete)`, value: '__yes__' },
+    { label: `✓ Mark ${taskText} done/complete`, value: '__mark__' },
+    { label: `🙅‍♂️ Mark ${taskText} cancelled`, value: '__canceled__' },
+    { label: `⌫ Remove the >date from ${taskText}`, value: '__remove__' },
+    { label: `➡️ Skip - Do not change "${contentText}" (and continue)`, value: '__skip__' },
     { label: '⎋ Cancel Review ⎋', value: '__xcl__' },
     { label: '------ Set Due Date To: -------', value: '-----' },
-  ].concat(dateOpts)
+    ...dateOpts,
+  ]
+}
+
+/**
+ * Open a note, highlight the task being looked at and prompt user for a choice of what to do with one specific line
+ * @param {*} origPara
+ * @returns {Promise<RescheduleUserAction | false>} the user choice or false
+ */
+async function getUserLineAction(origPara: TParagraph /*, updatedPara: TParagraph */): Promise<RescheduleUserAction | false> {
+  logDebug(pluginJson, `getUserLineAction "${origPara.note?.title || ''}": "${origPara.content || ''}"`)
+  const range = origPara.contentRange
+  if (origPara?.note?.filename) await Editor.openNoteByFilename(origPara.note.filename, false, range?.start || 0, range?.end || 0)
+  const sharedOpts = getSharedOptions(origPara, true)
+  const opts = [{ label: `✏️ Edit this task in note: "${origPara.note?.title || ''}"`, value: '__edit__' }, ...sharedOpts]
   const res = await chooseOption(`Task: "${origPara.content}"`, opts)
-  clo(res, `processLineClick after chooseOption res=`)
-  if (res) {
-    logDebug(pluginJson, `processLineClick on content: "${content}" res= "${res}"`)
-    switch (res) {
+  clo(res, `getUserLineAction after chooseOption res=`)
+  return res
+}
+
+/**
+ * Given a user choice on a specific action to take on a line, process the line accordingly
+ * @param {TParagraph} origPara
+ * @param {TParagraph} updatedPara
+ * @param {RescheduleUserAction|false} userChoice
+ * @returns
+ * @jest (limited) tests exist
+ */
+export async function processLineClick(origPara: TParagraph, updatedPara: TParagraph, userChoice: RescheduleUserAction | false): Promise<{ action: string, changed?: TParagraph }> {
+  if (userChoice) {
+    const content = origPara?.content || ''
+    logDebug(pluginJson, `processLineClick on content: "${content}" res= "${userChoice}"`)
+    switch (userChoice) {
       case '__edit__': {
         const input = await CommandBar.textPrompt('Edit task contents', `Change text:\n"${content}" to:\n`, updatedPara.content)
         if (input) {
@@ -39,7 +85,12 @@ async function processLineClick(origPara: TParagraph, updatedPara: TParagraph): 
       }
       case `__mark__`:
       case '__canceled__':
-        origPara.type = res === '__mark__' ? 'done' : 'cancelled'
+        origPara.type = userChoice === '__mark__' ? 'done' : 'cancelled'
+        return { action: 'set', changed: origPara }
+      case '__remove__':
+        while (RE_PLUS_DATE.test(origPara.content)) {
+          origPara.content = origPara.content.replace(RE_PLUS_DATE, '').replace(/ {2,}/, ' ').trim()
+        }
         return { action: 'set', changed: origPara }
       case `__yes__`: {
         return { action: 'set', changed: updatedPara }
@@ -48,11 +99,11 @@ async function processLineClick(origPara: TParagraph, updatedPara: TParagraph): 
         return { action: 'set', changed: origPara }
       }
     }
-    if (res[0] === '>') {
-      origPara.content = origPara.content.replace(RE_PLUS_DATE, res)
+    if (typeof userChoice === 'string' && userChoice[0] === '>') {
+      origPara.content = origPara.content.replace(RE_PLUS_DATE, userChoice)
       return { action: 'set', changed: origPara }
     }
-    logDebug(pluginJson, `processLineClick chosen: ${res} returning`)
+    logDebug(pluginJson, `processLineClick chosen: ${userChoice} returning`)
   }
   return { action: 'cancel' }
 }
@@ -70,33 +121,15 @@ async function showOverdueNote(note: TNote, updates: Array<TParagraph>, index: n
   await Editor.openNoteByFilename(note.filename, false, range?.start || 0, range?.end || 0)
   // const options = updates.map((p) => ({ label: showUpdatedTask ? p.content : note.paragraphs[Number(p.lineIndex) || 0].content, value: `${p.lineIndex}` })) //show the original value
   const options = updates.map((p) => ({ label: `${note.paragraphs[Number(p.lineIndex) || 0].content}`, value: `${p.lineIndex}` })) //show the original value
-  const dateOpts = getDateOptions()
   const opts = [
     { label: '>> SELECT A TASK OR MARK THEM ALL <<', value: '-----' },
     ...options,
     { label: '----------------------------------------------------------------', value: '-----' },
-    { label: `> Mark the above tasks as >today (repeating until complete)`, value: '__yes__' },
-    { label: `✓ Mark the above tasks done/complete`, value: '__mark__' },
-    { label: `🙅‍♂️ Mark the above tasks cancelled`, value: '__canceled__' },
-    { label: `❌ Skip -- Do not change tasks in "${note?.title || ''}" (and continue)`, value: '__no__' },
-    { label: `⎋ Cancel Review ⎋`, value: '__xcl__' },
-    { label: '------ Set All Due Date(s) To: -------', value: '-----' },
-  ].concat(dateOpts)
+    ...getSharedOptions({ note }, false),
+  ]
   const res = await chooseOption(`Note (${index + 1}/${totalNotesToUpdate}): "${note?.title || ''}"`, opts)
   logDebug(`NPnote`, `findNotesWithOverdueTasksAndMakeToday note:"${note?.title || ''}" user action: ${res}`)
   return res
-}
-
-type OverdueSearchOptions = {
-  openOnly: boolean,
-  foldersToIgnore: Array<string>,
-  datePlusOnly: boolean,
-  confirm: boolean,
-  showUpdatedTask: boolean,
-  showNote: boolean,
-  replaceDate: boolean,
-  singleNote: ?boolean,
-  noteFolder: ?string | false,
 }
 
 /**
@@ -106,7 +139,7 @@ type OverdueSearchOptions = {
  * @param {OverdueSearchOptions} options
  * @returns {number} the new note index (e.g. to force it to review this note again) by default, just return the index you got. -2 means user canceled. noteIndex-1 means show this note again
  */
-async function reviewSingleNote(notesToUpdate: Array<Array<TParagraph>>, noteIndex: number, options: OverdueSearchOptions): Promise<number> {
+async function reviewNote(notesToUpdate: Array<Array<TParagraph>>, noteIndex: number, options: OverdueSearchOptions): Promise<number> {
   const { showNote, confirm } = options
   let updates = notesToUpdate[noteIndex],
     currentTaskIndex = showNote ? -1 : 0,
@@ -126,26 +159,27 @@ async function reviewSingleNote(notesToUpdate: Array<Array<TParagraph>>, noteInd
           }
           if (!isNaN(res)) {
             // this was an index of a line to edit
-            logDebug(`NPnote`, `reviewSingleNote ${note.paragraphs[Number(res) || 0].content}`)
+            logDebug(`NPnote`, `reviewNote ${note.paragraphs[Number(res) || 0].content}`)
             // edit a single task item
-            clo(note.paragraphs[Number(res) || 0], `reviewSingleNote paraClicked=`)
+            clo(note.paragraphs[Number(res) || 0], `reviewNote paraClicked=`)
             const origPara = note.paragraphs[Number(res) || 0]
             const index = updates.findIndex((u) => u.lineIndex === origPara.lineIndex) || 0
             const updatedPara = updates[index]
-            const result = await processLineClick(origPara, updatedPara)
-            clo(result, 'NPNote::reviewSingleNote result')
+            const choice = await getUserLineAction(origPara /*, updatedPara */)
+            const result = await processLineClick(origPara, updatedPara, choice)
+            clo(result, 'NPNote::reviewNote result')
             if (result) {
               switch (result.action) {
                 case 'set':
-                  logDebug('NPNote::reviewSingleNote', `received set command; index= ${index}`)
-                  clo(result.changed, 'NPNote::reviewSingleNote result')
+                  logDebug('NPNote::reviewNote', `received set command; index= ${index}`)
+                  clo(result.changed, 'NPNote::reviewNote result')
                   if (result?.changed) {
                     updates[index] = result.changed
                     note.updateParagraph(updates[index])
-                    logDebug('NPNote::reviewSingleNote', `after set command; updates[index].content= ${updates[index].content}`)
+                    logDebug('NPNote::reviewNote', `after set command; updates[index].content= ${updates[index].content}`)
                     updates.splice(index, 1) //remove item which was updated from note's updates
                     logDebug(
-                      'NPNote::reviewSingleNote',
+                      'NPNote::reviewNote',
                       `after splice/remove this line from updates.length=${updates.length} noteIndex=${noteIndex} ; will return noteIndex=${
                         updates.length ? noteIndex - 1 : noteIndex
                       }`,
@@ -192,7 +226,7 @@ async function reviewSingleNote(notesToUpdate: Array<Array<TParagraph>>, noteInd
                 p.content = origPara.content.replace(RE_PLUS_DATE, String(res))
                 return p
               })
-              // clo(updates, `reviewSingleNote updates=`)
+              // clo(updates, `reviewNote updates=`)
               makeChanges = true
             }
           }
@@ -204,11 +238,11 @@ async function reviewSingleNote(notesToUpdate: Array<Array<TParagraph>>, noteInd
       }
       if (makeChanges) {
         // updatedParas = updatedParas.concat(updates)
-        logDebug(`NPNote::reviewSingleNote`, `about to update ${updates.length} todos in note "${note.filename || ''}" ("${note.title || ''}")`)
+        logDebug(`NPNote::reviewNote`, `about to update ${updates.length} todos in note "${note.filename || ''}" ("${note.title || ''}")`)
         note?.updateParagraphs(updates)
-        logDebug(`NPNote::reviewSingleNote`, `Updated ${updates.length} todos in note "${note.filename || ''}" ("${note.title || ''}")`)
+        logDebug(`NPNote::reviewNote`, `Updated ${updates.length} todos in note "${note.filename || ''}" ("${note.title || ''}")`)
       } else {
-        logDebug(`NPNote::reviewSingleNote`, `No update because makeChanges = ${String(makeChanges)}`)
+        logDebug(`NPNote::reviewNote`, `No update because makeChanges = ${String(makeChanges)}`)
       }
       // clo(updatedParas,`overdue tasks to be updated`)
     }
@@ -281,7 +315,7 @@ export async function findNotesWithOverdueTasksAndMakeToday(options: OverdueSear
       `starting note loop:${i} of ${notesToUpdate.length} notes;  number of updates left: notesToUpdate[i].length=${notesToUpdate[i].length}`,
     )
     if (notesToUpdate[i].length) {
-      i = await reviewSingleNote(notesToUpdate, i, options) // result may decrement index to see the note again after one line change
+      i = await reviewNote(notesToUpdate, i, options) // result may decrement index to see the note again after one line change
       if (i === -2) break //user selected cancel
     }
   }

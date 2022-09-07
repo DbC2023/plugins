@@ -6,7 +6,7 @@
 import strftime from 'strftime'
 import moment from 'moment/min/moment-with-locales'
 import { default as momentBusiness } from 'moment-business-days'
-import { formatISO9075, eachWeekendOfInterval, format, add } from 'date-fns'
+import { formatISO9075, eachWeekendOfInterval, format, add, getISOWeek, startOfISOWeek, endOfISOWeek, eachWeekOfInterval } from 'date-fns'
 import { logDebug, logError, logInfo, logWarn, clo } from './dev'
 import { type Option } from '@helpers/userInput'
 
@@ -680,44 +680,68 @@ export function TimeFormatted(seconds: number): string {
  * - add:https://date-fns.org/v2.29.2/docs/add
  * @author: @dwertheimer
  */
-export function getDateOptions<T>(): $ReadOnlyArray<Option<T>> {
+export function getDateOptions<T>(): $ReadOnlyArray<{ label: string, value: string }> {
   // const result = formatISO(new Date(2019, 8, 18, 19, 0, 52), { representation: 'date' })
   // d: dateObj, l: label, f: format, v: value
   const now = new Date()
   const formats = {
     withDay: ' (EEE, yyyy-MM-dd)',
-    noDay: ' yyyy-MM-dd',
+    noDay: 'yyyy-MM-dd',
     arrowDay: '>yyyy-MM-dd',
+    arrowISOWeek: '>yyyy[W]II',
   }
   const weekends = eachWeekendOfInterval({ start: now, end: add(now, { months: 1 }) }).filter((d) => d > now)
   const inputs = [
-    { l: `Today`, d: now, f: 'withDay' },
-    { l: `Tomorrow`, d: add(now, { days: 1 }), f: 'withDay' },
-    { l: `Next weekend`, d: weekends[0], f: 'withDay' },
-    { l: `Following weekend`, d: weekends[1], f: 'withDay' },
-    { l: `in 2 days`, d: add(now, { days: 2 }), f: 'withDay' },
-    { l: `in 3 days`, d: add(now, { days: 3 }), f: 'withDay' },
-    { l: `in 4 days`, d: add(now, { days: 4 }), f: 'withDay' },
-    { l: `in 5 days`, d: add(now, { days: 5 }), f: 'withDay' },
-    { l: `in 6 days`, d: add(now, { days: 6 }), f: 'withDay' },
-    { l: `in 1 week`, d: add(now, { weeks: 1 }), f: 'withDay' },
-    { l: `in 2 weeks`, d: add(now, { weeks: 2 }), f: 'withDay' },
-    { l: `in 3 weeks`, d: add(now, { weeks: 3 }), f: 'withDay' },
-    { l: `in 1 month`, d: add(now, { months: 1 }), f: 'withDay' },
-    { l: `in 2 months`, d: add(now, { months: 2 }), f: 'withDay' },
-    { l: `in 3 months`, d: add(now, { months: 3 }), f: 'withDay' },
-    { l: `in 4 months`, d: add(now, { months: 4 }), f: 'withDay' },
-    { l: `in 5 months`, d: add(now, { months: 5 }), f: 'withDay' },
-    { l: `in 6 months`, d: add(now, { months: 6 }), f: 'withDay' },
-    { l: `in 9 months`, d: add(now, { months: 9 }), f: 'withDay' },
-    { l: `in 1 year`, d: add(now, { years: 1 }), f: 'withDay' },
+    { l: `Today`, d: now, lf: 'withDay', vf: 'arrowDay' },
+    { l: `Tomorrow`, d: add(now, { days: 1 }), lf: 'withDay', vf: 'arrowDay' },
+    { l: `Next weekend`, d: weekends[0], lf: 'withDay', vf: 'arrowDay' },
+    { l: `Following weekend`, d: weekends[1], lf: 'withDay', vf: 'arrowDay' },
+    { l: `in 2 days`, d: add(now, { days: 2 }), lf: 'withDay', vf: 'arrowDay' },
+    { l: `in 3 days`, d: add(now, { days: 3 }), lf: 'withDay', vf: 'arrowDay' },
+    { l: `in 4 days`, d: add(now, { days: 4 }), lf: 'withDay', vf: 'arrowDay' },
+    { l: `in 5 days`, d: add(now, { days: 5 }), lf: 'withDay', vf: 'arrowDay' },
+    { l: `in 6 days`, d: add(now, { days: 6 }), lf: 'withDay', vf: 'arrowDay' },
+    { l: `in 1 week`, d: add(now, { weeks: 1 }), lf: 'withDay', vf: 'arrowDay' },
+    { l: `in 2 weeks`, d: add(now, { weeks: 2 }), lf: 'withDay', vf: 'arrowDay' },
+    { l: `in 3 weeks`, d: add(now, { weeks: 3 }), lf: 'withDay', vf: 'arrowDay' },
+    { l: `in 1 month`, d: add(now, { months: 1 }), lf: 'withDay', vf: 'arrowDay' },
+    { l: `in 2 months`, d: add(now, { months: 2 }), lf: 'withDay', vf: 'arrowDay' },
+    { l: `in 3 months`, d: add(now, { months: 3 }), lf: 'withDay', vf: 'arrowDay' },
+    { l: `in 4 months`, d: add(now, { months: 4 }), lf: 'withDay', vf: 'arrowDay' },
+    { l: `in 5 months`, d: add(now, { months: 5 }), lf: 'withDay', vf: 'arrowDay' },
+    { l: `in 6 months`, d: add(now, { months: 6 }), lf: 'withDay', vf: 'arrowDay' },
+    { l: `in 9 months`, d: add(now, { months: 9 }), lf: 'withDay', vf: 'arrowDay' },
+    { l: `in 1 year`, d: add(now, { years: 1 }), lf: 'withDay', vf: 'arrowDay' },
   ]
-
   const options = inputs.map((i) => ({
-    label: `${i['l']} ${format(i['d'], formats[i['f']])}`,
+    label: `${i['l']} ${format(i['d'], formats[i['lf']])}`,
     // $FlowIgnore
-    value: format(i['d'], formats['arrowDay']),
+    value: format(i['d'], formats[i['vf']]),
   }))
+
+  /*
+  const weeks = {
+    { l: `>thisweek (${format(thisWeek.date, formats.arrowISOWeek)} -- ${format(thisWeek.start)}-${format(thisWeek.end)}})`, d: now, f: 'isoWeek' },
+  }
+*/
+  const thisWeek = { date: now, start: startOfISOWeek(now), end: endOfISOWeek(now) }
+  const weeks = eachWeekOfInterval({ start: now, end: add(now, { months: 6 }) })
+  const weekOpts = weeks.map((w) => {
+    const isoWeek = format(w, 'II')
+    const start = startOfISOWeek(w)
+    const end = endOfISOWeek(w)
+    const arrowWeek = `>${format(start, 'yyyy')}-W${isoWeek}`
+    const arrowWeekLabel = `>Week${isoWeek} Weekly Note`
+    return {
+      label: `${arrowWeekLabel} (${format(start, formats.noDay)} - ${format(end, formats.noDay)})`,
+      // $FlowIgnore
+      value: arrowWeek,
+    }
+  })
+  const extras = [
+    { ...weekOpts[0], ...{ label: `>thisweek -- ${weekOpts[0].label}` } },
+    { ...weekOpts[1], ...{ label: `>nextweek -- ${weekOpts[1].label}` } },
+  ]
   // clo(options, `getDateOptions: options=`)
-  return options
+  return [...options, ...extras, ...weekOpts]
 }
