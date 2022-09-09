@@ -27,7 +27,7 @@ export {
   setPreset04,
   setPreset05,
 } from './NPThemeChooser' // add one of these for every command specifified in plugin.json (the function could be in any file as long as it's exported)
-export { chooseStyle, editStyleAttribute } from './NPThemeCustomizer'
+export { copyThemeStyle, editStyleAttribute } from './NPThemeCustomizer'
 
 // Do not change this line. This is here so your plugin will get recompiled every time you change your plugin.json file
 import pluginJson from '../plugin.json'

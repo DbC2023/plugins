@@ -49,7 +49,7 @@
     {
       "name": "Add a Style to a Custom Theme",
       "description": "Choose Style from Master Stylesheet",
-      "jsFunction": "chooseStyle",
+      "jsFunction": "copyThemeStyle",
       "alias": [],
       "arguments": []
     },

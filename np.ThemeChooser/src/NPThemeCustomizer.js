@@ -25,10 +25,10 @@ export async function saveTheme(themeObj: any, filename: string) {
  * Choose a style from the master style template (in this plugin in /src/support/masterTheme.json)
  * Plugin entrypoint for command: "/Add a Style to Current Theme"
  */
-export async function chooseStyle() {
+export async function copyThemeStyle() {
   try {
-    // @qualitativeeasing: should probably turn this into a do-while loop so you can keep adding styles without re-invoking the plugin. just put a showMessageYesNo at the end asking if they want to add more
-    // clo(masterTheme, `NPStyleChooser::chooseStyle masterTheme=`) //if you want to console.log the whole theme file
+    // @qualitativeeasing: this works, but should probably turn this into a do-while loop so you can keep adding styles without re-invoking the plugin. just put a showMessageYesNo at the end asking if they want to add more
+    // clo(masterTheme, `NPStyleChooser::copyThemeStyle masterTheme=`) //if you want to console.log the whole theme file
     // NOTE: in order to see the console logs, go to the plugin settings and set log level to DEBUG
     const { styles } = masterTheme // pluck just the styles property from the theme file
     const keys = Object.keys(styles)
@@ -43,7 +43,7 @@ export async function chooseStyle() {
       // Editor.availableThemes sends back the themes wrapped in an object with extra data (.name && .filename)
       // so to get the actual theme file data, we look under the .values property
       const myThemeObjStyles = myThemeObj.values.styles
-      clo(myThemeObj, `NPStyleChooser::chooseStyle myThemeObj=`)
+      clo(myThemeObj, `NPStyleChooser::copyThemeStyle myThemeObj=`)
       let writeIt = true
       if (myThemeObjStyles.hasOwnProperty('chosenStyle')) {
         const replace = await showMessageYesNo(`The key "${chosenStyle}" already exists in theme: "${myThemeName}". Replace it?`)
