@@ -15,6 +15,7 @@ export const RE_ISO_DATE = '\\d{4}-[01]\\d-[0123]\\d' // find ISO dates of form 
 export const RE_SCHEDULED_ISO_DATE = '>\\d{4}-[01]\\d-[0123]\\d' // find scheduled dates of form >YYYY-MM-DD
 export const RE_YYYYMMDD_DATE = '\\d{4}[01]\\d[0123]\\d' // find dates of form YYYYMMDD
 export const RE_YYYY_Wnn_DATE = '\\d{4}\\-W[0-5]\\d' // find dates of form YYYY-Wnn
+export const WEEK_NOTE_LINK = `[\<\>]${RE_YYYY_Wnn_DATE}`
 export const RE_DAILY_NOTE_FILENAME = '\\/?\\d{4}[0-1]\\d[0-3]\\d\\.'
 export const RE_WEEKLY_NOTE_FILENAME = '\\/?\\d{4}-W[0-5]\\d\\.'
 export const RE_TIME = '[0-2]\\d{1}:[0-5]\\d{1}\\s?(?:AM|PM|am|pm)?' // find '12:23' with optional '[ ][AM|PM|am|pm]'
@@ -206,11 +207,24 @@ export function removeDateTags(content: string): string {
 }
 
 // @dwertheimer
-export function removeDateTagsAndToday(tag: string): string {
-  return removeDateTags(tag)
-    .replace(/>today/, '')
-    .replace(/\s{2,}/g, ' ')
-    .trimEnd()
+/**
+ * Remove all >date -related things from a line (and optionally >week ones also)
+ * @param {*} tag
+ * @param {*} weeklyAlso
+ * @returns
+ */
+export function removeDateTagsAndToday(tag: string, weeklyAlso: boolean = false): string {
+  let newString = tag,
+    lastPass = tag
+  do {
+    lastPass = newString
+    newString = removeDateTags(tag)
+      .replace(weeklyAlso ? new RegExp(WEEK_NOTE_LINK, 'g') : '', '')
+      .replace(/>today/, '')
+      .replace(/\s{2,}/g, ' ')
+      .trimEnd()
+  } while (newString !== lastPass)
+  return newString
 }
 
 export const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
@@ -724,7 +738,7 @@ export function getDateOptions<T>(): $ReadOnlyArray<{ label: string, value: stri
     { l: `>thisweek (${format(thisWeek.date, formats.arrowISOWeek)} -- ${format(thisWeek.start)}-${format(thisWeek.end)}})`, d: now, f: 'isoWeek' },
   }
 */
-  const thisWeek = { date: now, start: startOfISOWeek(now), end: endOfISOWeek(now) }
+  // const thisWeek = { date: now, start: startOfISOWeek(now), end: endOfISOWeek(now) }
   const weeks = eachWeekOfInterval({ start: now, end: add(now, { months: 6 }) })
   const weekOpts = weeks.map((w) => {
     const isoWeek = format(w, 'II')

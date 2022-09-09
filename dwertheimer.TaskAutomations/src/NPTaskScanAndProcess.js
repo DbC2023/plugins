@@ -28,7 +28,7 @@ type RescheduleUserAction = '__yes__' | '__mark__' | '__canceled__' | '__remove_
  */
 function getSharedOptions(origPara: TParagraph | { note: TNote }, isSingleLine: boolean): $ReadOnlyArray<{ label: string, value: string }> {
   const dateOpts = getDateOptions()
-  // clo(dateOpts, `getUserLineAction dateOpts`)
+  // clo(dateOpts, `promptUserToActOnLine dateOpts`)
   const note = origPara.note
   const taskText = isSingleLine ? `this task` : `the above tasks`
   const contentText = isSingleLine ? `"${origPara?.content || ''}"` : `tasks in "${note?.title || ''}"`
@@ -49,14 +49,18 @@ function getSharedOptions(origPara: TParagraph | { note: TNote }, isSingleLine: 
  * @param {*} origPara
  * @returns {Promise<RescheduleUserAction | false>} the user choice or false
  */
-async function getUserLineAction(origPara: TParagraph /*, updatedPara: TParagraph */): Promise<RescheduleUserAction | false> {
-  logDebug(pluginJson, `getUserLineAction "${origPara.note?.title || ''}": "${origPara.content || ''}"`)
+async function promptUserToActOnLine(origPara: TParagraph /*, updatedPara: TParagraph */): Promise<RescheduleUserAction | false> {
+  logDebug(pluginJson, `promptUserToActOnLine "${origPara.note?.title || ''}": "${origPara.content || ''}"`)
   const range = origPara.contentRange
   if (origPara?.note?.filename) await Editor.openNoteByFilename(origPara.note.filename, false, range?.start || 0, range?.end || 0)
   const sharedOpts = getSharedOptions(origPara, true)
-  const opts = [{ label: `✏️ Edit this task in note: "${origPara.note?.title || ''}"`, value: '__edit__' }, ...sharedOpts]
+  const opts = [
+    { label: `✏️ Edit this task in note: "${origPara.note?.title || ''}"`, value: '__edit__' },
+    { label: `␡ Delete this line (be sure!)`, value: '__delete__' },
+    ...sharedOpts,
+  ]
   const res = await chooseOption(`Task: "${origPara.content}"`, opts)
-  clo(res, `getUserLineAction after chooseOption res=`)
+  clo(res, `promptUserToActOnLine after chooseOption res=`)
   return res
 }
 
@@ -68,10 +72,14 @@ async function getUserLineAction(origPara: TParagraph /*, updatedPara: TParagrap
  * @returns
  * @jest (limited) tests exist
  */
-export async function processLineClick(origPara: TParagraph, updatedPara: TParagraph, userChoice: RescheduleUserAction | false): Promise<{ action: string, changed?: TParagraph }> {
+export async function processUserActionOnLine(
+  origPara: TParagraph,
+  updatedPara: TParagraph,
+  userChoice: RescheduleUserAction | false,
+): Promise<{ action: string, changed?: TParagraph }> {
   if (userChoice) {
     const content = origPara?.content || ''
-    logDebug(pluginJson, `processLineClick on content: "${content}" res= "${userChoice}"`)
+    logDebug(pluginJson, `processUserActionOnLine on content: "${content}" res= "${userChoice}"`)
     switch (userChoice) {
       case '__edit__': {
         const input = await CommandBar.textPrompt('Edit task contents', `Change text:\n"${content}" to:\n`, updatedPara.content)
@@ -92,18 +100,22 @@ export async function processLineClick(origPara: TParagraph, updatedPara: TParag
           origPara.content = origPara.content.replace(RE_PLUS_DATE, '').replace(/ {2,}/, ' ').trim()
         }
         return { action: 'set', changed: origPara }
+      case `__delete__`:
+        return { action: 'delete' }
       case `__yes__`: {
         return { action: 'set', changed: updatedPara }
       }
       case `__no__`: {
         return { action: 'set', changed: origPara }
       }
+      case '__skip__':
+        return { action: 'skip', changed: origPara }
     }
     if (typeof userChoice === 'string' && userChoice[0] === '>') {
       origPara.content = origPara.content.replace(RE_PLUS_DATE, userChoice)
       return { action: 'set', changed: origPara }
     }
-    logDebug(pluginJson, `processLineClick chosen: ${userChoice} returning`)
+    logDebug(pluginJson, `processUserActionOnLine chosen: ${userChoice} returning`)
   }
   return { action: 'cancel' }
 }
@@ -165,8 +177,8 @@ async function reviewNote(notesToUpdate: Array<Array<TParagraph>>, noteIndex: nu
             const origPara = note.paragraphs[Number(res) || 0]
             const index = updates.findIndex((u) => u.lineIndex === origPara.lineIndex) || 0
             const updatedPara = updates[index]
-            const choice = await getUserLineAction(origPara /*, updatedPara */)
-            const result = await processLineClick(origPara, updatedPara, choice)
+            const choice = await promptUserToActOnLine(origPara /*, updatedPara */)
+            const result = await processUserActionOnLine(origPara, updatedPara, choice)
             clo(result, 'NPNote::reviewNote result')
             if (result) {
               switch (result.action) {
@@ -193,6 +205,15 @@ async function reviewNote(notesToUpdate: Array<Array<TParagraph>>, noteIndex: nu
                   const range = note.paragraphs[updates[0].lineIndex].contentRange
                   await Editor.openNoteByFilename(note.filename, false, range?.start || 0, range?.end || 0, true)
                   return -2
+                }
+                case 'delete': {
+                  updates.splice(index, 1) //remove item which was updated from note's updates
+                  origPara.note?.removeParagraph(origPara)
+                  return updates.length ? noteIndex - 1 : noteIndex
+                }
+                case 'skip': {
+                  updates.splice(index, 1) //remove item which was updated from note's updates
+                  return updates.length ? noteIndex - 1 : noteIndex
                 }
               }
               //user selected an item in the list to come back to later (in splitview)

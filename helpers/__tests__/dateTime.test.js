@@ -236,6 +236,12 @@ describe(`${PLUGIN_NAME}`, () => {
     test('should remove nothing if no date tag ', () => {
       expect(dt.removeDateTagsAndToday(`test no date`)).toEqual('test no date')
     })
+    test('should work for single >week also ', () => {
+      expect(dt.removeDateTagsAndToday(`test >2000-W02`, true)).toEqual('test')
+    })
+    test('should work for many items in a line ', () => {
+      expect(dt.removeDateTagsAndToday(`test >2000-W02 >2020-01-01 <2020-02-02 >2020-09-28`, true)).toEqual('test')
+    })
   })
 
   describe('calcOffsetDateStr', () => {

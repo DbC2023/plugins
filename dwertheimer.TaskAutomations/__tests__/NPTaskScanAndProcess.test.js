@@ -19,19 +19,19 @@ describe(`${PLUGIN_NAME}`, () => {
   describe(`${FILENAME}`, () => {
     //functions go here using jfunc command
     /*
-     * processLineClick()
+     * processUserActionOnLine()
      */
-    describe('processLineClick()' /* function */, () => {
+    describe('processUserActionOnLine()' /* function */, () => {
       test('should remove date when userChoice="__remove__"', async () => {
         const origPara = { content: `foo >2020-01-01 bar !!` }
         const changedPara = { content: `foo bar !!` }
-        const result = await f.processLineClick(origPara, {}, '__remove__')
+        const result = await f.processUserActionOnLine(origPara, {}, '__remove__')
         expect(result).toEqual({ action: 'set', changed: changedPara })
       })
       test('should remove >1 date when userChoice="__remove__"', async () => {
         const origPara = { content: `foo >2020-01-01 bar !! >2020-01-01` }
         const changedPara = { content: `foo bar !!` }
-        const result = await f.processLineClick(origPara, {}, '__remove__')
+        const result = await f.processUserActionOnLine(origPara, {}, '__remove__')
         expect(result).toEqual({ action: 'set', changed: changedPara })
       })
     })
