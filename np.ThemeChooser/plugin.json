@@ -47,6 +47,13 @@
       "hidden": true
     },
     {
+      "name": "Add a Style to Current Theme",
+      "description": "Choose Style from Master Stylesheet",
+      "jsFunction": "chooseStyle",
+      "alias": [],
+      "arguments": []
+    },
+    {
       "name": "Theme Chooser: Set Preset 02",
       "description": "Switch Theme",
       "jsFunction": "setPreset02",
