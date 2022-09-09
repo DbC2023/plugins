@@ -47,9 +47,16 @@
       "hidden": true
     },
     {
-      "name": "Add a Style to Current Theme",
+      "name": "Add a Style to a Custom Theme",
       "description": "Choose Style from Master Stylesheet",
       "jsFunction": "chooseStyle",
+      "alias": [],
+      "arguments": []
+    },
+    {
+      "name": "Edit a Theme Style Attribute",
+      "description": "Choose Style from Custom Theme",
+      "jsFunction": "editStyleAttribute",
       "alias": [],
       "arguments": []
     },

@@ -15,14 +15,22 @@
 // So you need to add a line below for each function that you want NP to have access to.
 // Typically, listed below are only the top-level plug-in functions listed in plugin.json
 
-import { showMessage } from '../../helpers/userInput'
-
-export { chooseTheme, changePreset, setDefaultLightDarkTheme, toggleTheme, setPreset01, setPreset02, setPreset03, setPreset04, setPreset05 } from './NPThemeChooser' // add one of these for every command specifified in plugin.json (the function could be in any file as long as it's exported)
-export { chooseStyle } from './NPStyleChooser'
+export {
+  chooseTheme,
+  saveThemeNameAsCommand,
+  changePreset,
+  setDefaultLightDarkTheme,
+  toggleTheme,
+  setPreset01,
+  setPreset02,
+  setPreset03,
+  setPreset04,
+  setPreset05,
+} from './NPThemeChooser' // add one of these for every command specifified in plugin.json (the function could be in any file as long as it's exported)
+export { chooseStyle, editStyleAttribute } from './NPThemeCustomizer'
 
 // Do not change this line. This is here so your plugin will get recompiled every time you change your plugin.json file
 import pluginJson from '../plugin.json'
-import { saveThemeNameAsCommand } from './NPThemeChooser'
 import { log, clo } from '@helpers/dev'
 import { /* getPluginJson ,*/ updateSettingData, pluginUpdated } from '@helpers/NPConfiguration'
 
