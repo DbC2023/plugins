@@ -13,7 +13,14 @@ export {
 export { default as markTasks } from './markTasks'
 export { taskSync } from './taskSync'
 export { copyTagsFromLineAbove, copyTagsFromHeadingAbove, copyLineForEachMention, copyLineForEachHashtag } from './tagTasks'
-export { updateDatePlusTags, reviewOverdueTasksByNote, reviewOverdueTasksByTask, reviewOverdueTasksInNote, reviewOverdueTasksInFolder } from './NPOverdue'
+export {
+  updateDatePlusTags,
+  reviewOverdueTasksByNote,
+  reviewOverdueTasksByTask,
+  reviewOverdueTasksInNote,
+  reviewOverdueTasksInFolder,
+  reviewEditorReferencedTasks,
+} from './NPOverdue'
 export { openIncompleteLinksInNote, openURLOnLine } from './NPOpenLinks'
 import pluginJson from '../plugin.json'
 import { clo } from '@helpers/dev'

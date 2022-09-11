@@ -6,7 +6,7 @@ import { log, logError, logDebug, timer, clo } from '@helpers/dev'
 import { convertOverdueTasksToToday, RE_PLUS_DATE } from '@helpers/note'
 import { chooseOption, showMessage } from '@helpers/userInput'
 
-type OverdueSearchOptions = {
+export type OverdueSearchOptions = {
   openOnly: boolean,
   foldersToIgnore: Array<string>,
   datePlusOnly: boolean,
@@ -14,8 +14,9 @@ type OverdueSearchOptions = {
   showUpdatedTask: boolean,
   showNote: boolean,
   replaceDate: boolean,
-  singleNote: ?boolean,
+  noteTaskList: null | Array<Array<TParagraph>>,
   noteFolder: ?string | false,
+  overdueOnly: ?boolean /* used for reviewing today's references etc */,
 }
 
 type RescheduleUserAction = '__yes__' | '__mark__' | '__canceled__' | '__remove__' | '__skip__' | '__xcl__' | string /* >dateOptions */ | number /* lineIndex of item to pop open */
@@ -131,8 +132,20 @@ export async function processUserActionOnLine(
 async function showOverdueNote(note: TNote, updates: Array<TParagraph>, index: number, totalNotesToUpdate: number) {
   const range = updates[0].contentRange
   await Editor.openNoteByFilename(note.filename, false, range?.start || 0, range?.end || 0)
-  // const options = updates.map((p) => ({ label: showUpdatedTask ? p.content : note.paragraphs[Number(p.lineIndex) || 0].content, value: `${p.lineIndex}` })) //show the original value
-  const options = updates.map((p) => ({ label: `${note.paragraphs[Number(p.lineIndex) || 0].content}`, value: `${p.lineIndex}` })) //show the original value
+  // const options = updates.map((p) => ({ label: `${note?.paragraphs?[Number(p.lineIndex) || 0]?.content}`, value: `${p.lineIndex}` })) //show the original value
+  clo(note, `showOverdueNote: note[${index}]=`)
+  const options = updates.map((p, i) => {
+    logDebug(
+      pluginJson,
+      `showOverdueNote updates.map[${i}] note.title=${note.title || ''} note?.paragraphs=${note?.paragraphs.length} p.lineIndex=${p.lineIndex} p.content=${p.content}`,
+    )
+    if (note.paragraphs.length <= p.lineIndex) {
+      //seems like this is an API bug which shouldn't be possible
+      return { label: `Error: LineIndex=${p.lineIndex}; paragraphs=${note.paragraphs.length}`, value: `0` }
+    } else {
+      return { label: `${note?.paragraphs[Number(p.lineIndex) || 0]?.content}`, value: `${p.lineIndex}` }
+    }
+  }) //show the original value
   const opts = [
     { label: '>> SELECT A TASK OR MARK THEM ALL <<', value: '-----' },
     ...options,
@@ -140,7 +153,7 @@ async function showOverdueNote(note: TNote, updates: Array<TParagraph>, index: n
     ...getSharedOptions({ note }, false),
   ]
   const res = await chooseOption(`Note (${index + 1}/${totalNotesToUpdate}): "${note?.title || ''}"`, opts)
-  logDebug(`NPnote`, `findNotesWithOverdueTasksAndMakeToday note:"${note?.title || ''}" user action: ${res}`)
+  logDebug(`NPnote`, `showOverdueNote note:"${note?.title || ''}" user action: ${res}`)
   return res
 }
 
@@ -158,6 +171,8 @@ async function reviewNote(notesToUpdate: Array<Array<TParagraph>>, noteIndex: nu
     currentTaskLineIndex = updates[0].lineIndex,
     res
   const note = updates[0].note
+  logDebug(pluginJson, `reviewNote starting review of note: "${note?.title || ''}" tasksToUpdate=${updates.length}`)
+  clo(updates, `reviewNote updates`)
   if (note) {
     if (updates.length > 0) {
       let makeChanges = !confirm
@@ -282,7 +297,7 @@ async function reviewNote(notesToUpdate: Array<Array<TParagraph>>, noteIndex: nu
  * {boolean} confirm - should NotePlan pop up a message about how many changes are about to be made
  * {boolean} showNote - show the note as review is happening
  * {boolean} replaceDate - whether to replace date with >today or just tack it on (leaving date in place)
- * {boolean} singleNote - run on the open note in the Editor
+ * {boolean} noteTaskList - run on the open note in the Editor
  * {string} noteFolder - one specific folder to look in (or false)
  * @author @dwertheimer
  */
@@ -294,13 +309,14 @@ export async function findNotesWithOverdueTasksAndMakeToday(options: OverdueSear
     confirm = false,
     /* showNote = true, // unused variable */
     replaceDate = true,
-    singleNote = false /*, showUpdatedTask = true */,
+    noteTaskList = null /*, showUpdatedTask = true */,
     noteFolder = false,
+    overdueOnly = true,
   } = options
   const start = new Date()
   let notesWithDates
-  if (singleNote) {
-    notesWithDates = [Editor.note].filter((n) => n?.datedTodos?.length || 0 > 0)
+  if (noteTaskList) {
+    notesWithDates = noteTaskList
   } else {
     if (noteFolder) {
       notesWithDates = [...DataStore.projectNotes, ...DataStore.calendarNotes]
@@ -310,19 +326,25 @@ export async function findNotesWithOverdueTasksAndMakeToday(options: OverdueSear
       notesWithDates = [...DataStore.projectNotes, ...DataStore.calendarNotes].filter((n) => (n?.datedTodos ? n.datedTodos?.length > 0 : false))
     }
   }
-  if (!singleNote && foldersToIgnore) {
-    notesWithDates = notesWithDates.filter((note) => foldersToIgnore.every((skipFolder) => !(note?.filename ? note.filename.includes(`${skipFolder}/`) : false)))
+  if (!noteTaskList && foldersToIgnore) {
+    notesWithDates = notesWithDates.filter((note) =>
+      foldersToIgnore.every((skipFolder) => !(note?.filename && typeof note.filename === 'string' ? note.filename.includes(`${skipFolder}/`) : false)),
+    )
   }
   logDebug(`NPNote::findNotesWithOverdueTasksAndMakeToday`, `total notesWithDates: ${notesWithDates.length}`)
   // let updatedParas = []
-  const notesToUpdate = []
-  for (const n of notesWithDates) {
-    if (n) {
-      const updates = convertOverdueTasksToToday(n, openOnly, datePlusOnly, replaceDate)
-      if (updates.length > 0) {
-        notesToUpdate.push(updates)
+  let notesToUpdate = []
+  if (!noteTaskList) {
+    for (const n of notesWithDates) {
+      if (n) {
+        const updates = convertOverdueTasksToToday(n, openOnly, datePlusOnly, replaceDate)
+        if (updates.length > 0) {
+          notesToUpdate.push(updates)
+        }
       }
     }
+  } else {
+    notesToUpdate = noteTaskList
   }
   logDebug(`NPNote::findNotesWithOverdueTasksAndMakeToday`, `total notes with overdue dates: ${notesToUpdate.length}`)
   if (!notesToUpdate.length && confirm) {

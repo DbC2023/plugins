@@ -690,50 +690,6 @@ describe(`${PLUGIN_NAME}`, () => {
       })
     })
 
-    describe('findTodosInNote', () => {
-      const note = {
-        paragraphs: [
-          { content: 'foo', type: 'done', filename: 'foof.md' },
-          { content: 'bar', type: 'open', filename: 'barf.md' },
-          { content: 'baz', type: 'list', filename: 'bazf.txt' },
-          { content: 'baz', type: 'text', filename: 'bazf.txt' },
-        ],
-      }
-      test('should find nothing if there are no today marked items', () => {
-        const res = tb.findTodosInNote(note, config)
-        expect(res).toEqual([])
-      })
-      test('should find items with >today in them', () => {
-        const note2 = { paragraphs: [{ content: 'foo >today bar', type: 'open', filename: 'foof.md' }] }
-        const consolidated = { paragraphs: [...note2.paragraphs, ...note.paragraphs] }
-        const res = tb.findTodosInNote(consolidated, config)
-        expect(res.length).toEqual(1)
-        expect(res[0].content).toEqual(note2.paragraphs[0].content)
-      })
-      test('should find items with >[todays date hyphenated] in them', () => {
-        const tdh = format(new Date(), 'yyyy-MM-dd')
-        const note2 = { paragraphs: [{ content: `foo >${tdh} bar`, type: 'open', filename: 'foof.md' }] }
-        const consolidated = { paragraphs: [...note2.paragraphs, ...note.paragraphs] }
-        const res = tb.findTodosInNote(consolidated, config)
-        expect(res.length).toEqual(1)
-        expect(res[0].content).toEqual(note2.paragraphs[0].content)
-      })
-      test('should not find items with >today if they are done', () => {
-        const note2 = { paragraphs: [{ content: 'foo >today bar', type: 'done', filename: 'foof.md' }] }
-        const res = tb.findTodosInNote(note2, config)
-        expect(res).toEqual([])
-      })
-      test('should return a title from the filename.md', () => {
-        const note2 = { paragraphs: [{ content: 'foo >today bar', type: 'open', filename: 'foof.md', title: 'not' }] }
-        const res = tb.findTodosInNote(note2, config)
-        expect(res[0].title).toEqual('foof')
-      })
-      test('should return a title from the filename.txt', () => {
-        const note2 = { paragraphs: [{ content: 'foo >today bar', type: 'open', filename: 'foof.txt', title: 'not' }] }
-        const res = tb.findTodosInNote(note2, config)
-        expect(res[0].title).toEqual('foof')
-      })
-    })
     describe('appendLinkIfNecessary', () => {
       const paragraphs = [
         { content: 'foo', type: 'done', filename: 'foof.md' },

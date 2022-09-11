@@ -3,7 +3,7 @@ import { endOfDay, startOfDay, eachMinuteOfInterval, formatISO9075, addMinutes, 
 import type { SortableParagraphSubset } from '../../helpers/sorting'
 import type { IntervalMap, OpenBlock, BlockArray, TimeBlocksWithMap, BlockData, TimeBlockDefaults, PartialCalendarItem, ExtendedParagraph } from './timeblocking-flow-types'
 import type { AutoTimeBlockingConfig } from './config'
-import { getDateObjFromDateTimeString, getTimeStringFromDate, getTodaysDateHyphenated, removeDateTagsAndToday } from '@helpers/dateTime'
+import { getDateObjFromDateTimeString, getTimeStringFromDate, removeDateTagsAndToday } from '@helpers/dateTime'
 import { sortListBy } from '@helpers/sorting'
 import { returnNoteLink, createPrettyOpenNoteLink } from '@helpers/general'
 import { textWithoutSyncedCopyTag } from '@helpers/syncedCopies'
@@ -495,32 +495,6 @@ export function excludeTasksWithPatterns(tasks: Array<TParagraph>, pattern: stri
   } else {
     return tasks.filter((t) => !t.content.match(pattern))
   }
-}
-
-/**
- * Find paragraphs in note which are open and tagged for today (either >today or hyphenated date)
- * @param {*} note
- * @param {*} config
- * @returns {array} of paragraphs
- */
-export function findTodosInNote(note: TNote): Array<ExtendedParagraph> {
-  const hyphDate = getTodaysDateHyphenated()
-  // const toDate = getDateObjFromDateTimeString(hyphDate)
-  const isTodayItem = (text) => [`>${hyphDate}`, '>today'].filter((a) => text.indexOf(a) > -1).length > 0
-  const todos: Array<ExtendedParagraph> = []
-  if (note.paragraphs) {
-    note.paragraphs.forEach((p) => {
-      if (isTodayItem(p.content) && p.type !== 'done') {
-        const newP = copyObject(p)
-        newP.type = 'open' // Pretend it's a todo even if it's text or a listitem
-        // $FlowIgnore
-        newP.title = (p.filename ?? '').replace('.md', '').replace('.txt', '')
-        todos.push(newP)
-      }
-    })
-  }
-  // console.log(`findTodosInNote found ${todos.length} todos - adding to list`)
-  return todos
 }
 
 /**
