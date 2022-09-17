@@ -5,18 +5,13 @@
 import pluginJson from '../plugin.json'
 import { logDebug, log, logError, clo, JSP } from '../../helpers/dev'
 import { showMessage, showMessageYesNo, chooseOption } from '@helpers/userInput'
-import { setCommandDetailsForFunctionNamed, getCommandIndex } from '@helpers/config'
-import { getPluginJson, savePluginJson } from '@helpers/NPConfiguration'
-
-const BLANK = `Theme Chooser: Set Preset`
-const PRESET_DESC = `Switch Theme`
 
 /**
  * Get the theme object by name
  * @param {string} name - the name of the theme to get
  * @returns {any} - the object of the theme
  */
-async function getThemeObjByName(name: string): Promise<any | null> {
+export async function getThemeObjByName(name: string): Promise<any | null> {
   const themes = Editor.availableThemes
   logDebug(pluginJson, `getThemeObjByName, looking for ${name}, total themes: ${themes.length}`)
   const theme = themes.filter((t) => t.name === name)
@@ -60,7 +55,7 @@ export async function chooseTheme(incoming: ?string = ''): Promise<void> {
 }
 
 /**
- * Ask user to choose a theme, return the name of the chosen theme
+ * Ask user to choose a theme, return the name (string) of the chosen theme
  * @param {string} lightOrDark //not currently used
  * @returns {string} theme name or default -- BLANK: "Theme Chooser: Set Preset"
  */
@@ -72,65 +67,6 @@ export async function getThemeChoice(lightOrDark: string = '', message: string =
   }
   const selection = await CommandBar.showOptions(themeOpts, message)
   return selection ? selection.value : ''
-}
-
-export async function saveThemeNameAsCommand(commandName: string, themeName: string) {
-  if (themeName !== '') {
-    logDebug(pluginJson, `NPThemeChooser::saveThemeNameAsCommand: setting: ${String(commandName)} to: ${String(themeName)}; First will pull the existing plugin.json`)
-    const livePluginJson = await getPluginJson(pluginJson['plugin.id'])
-    const newPluginJson = setCommandDetailsForFunctionNamed(livePluginJson, commandName, themeName, PRESET_DESC, false)
-    const settings = DataStore.settings
-    DataStore.settings = { ...settings, ...{ [commandName]: themeName } }
-    const ret = await savePluginJson(pluginJson['plugin.id'], newPluginJson)
-    logDebug(pluginJson, `NPThemeChooser::saveThemeNameAsCommand:  savePluginJson result = ${String(ret)}`)
-  }
-}
-
-export async function changePreset() {
-  const livePluginJson = await getPluginJson(pluginJson['plugin.id'])
-  if (livePluginJson) {
-    const commands = livePluginJson['plugin.commands']
-    const presetCommands = commands.filter((command) => command.description === PRESET_DESC)
-    const opts = presetCommands.map((command) => ({ label: command.name, value: command.jsFunction }))
-    const chosen = await chooseOption('Choose a preset to change', opts)
-    if (chosen) {
-      await presetChosen(chosen, true)
-    }
-  }
-}
-
-export async function presetChosen(selectedItem: string, overwrite: boolean = false) {
-  const commandName = selectedItem
-  const livePluginJson = await getPluginJson(pluginJson['plugin.id'])
-  const index = getCommandIndex(livePluginJson, commandName)
-  if (livePluginJson && index > -1) {
-    const commandDetails = livePluginJson['plugin.commands'][index]
-    logDebug(pluginJson, `presetChosen: command.name = "${commandDetails.name}"`)
-    const themeIsUnset = commandDetails.name.match(/Theme Chooser: Set Preset/)
-    logDebug(`presetChosen: themeIsUnset=${themeIsUnset}`)
-    if (themeIsUnset || overwrite) {
-      const themeObj = await getThemeChoice()
-      if (themeObj !== '') {
-        const themeName = themeObj
-        await saveThemeNameAsCommand(commandName, themeName)
-        await showMessage(`Menu command set to:\n"${themeName}"\nYou will find it in the CommandBar immediately, but won't see it in the menu until you restart NotePlan.`)
-      } else {
-        const theme = await getThemeObjByName(commandDetails.name)
-        if (theme) {
-          logDebug(pluginJson, `presetChosen: Setting theme to: ${commandDetails.name}`)
-          Editor.setTheme(theme.filename)
-        } else {
-          logError(pluginJson, `presetChosen: ${commandName} theme not found`)
-          await showMessage(`Could not find theme named "${commandName}"`)
-        }
-      }
-    } else {
-      logError(pluginJson, `presetChosen: getThemeChoice returned empty`)
-    }
-  } else {
-    logError(pluginJson, `presetChosen: ${commandName} not found`)
-    await showMessage(`Could not find preset theme named "${commandName}"`)
-  }
 }
 
 /*
@@ -212,42 +148,6 @@ export async function toggleTheme() {
       await setDefaultLightDarkTheme()
       await toggleTheme()
     }
-  } catch (error) {
-    logError(pluginJson, JSP(error))
-  }
-}
-
-export async function setPreset01() {
-  try {
-    await presetChosen(`setPreset01`)
-  } catch (error) {
-    logError(pluginJson, JSP(error))
-  }
-}
-export async function setPreset02() {
-  try {
-    await presetChosen(`setPreset02`)
-  } catch (error) {
-    logError(pluginJson, JSP(error))
-  }
-}
-export async function setPreset03() {
-  try {
-    await presetChosen(`setPreset03`)
-  } catch (error) {
-    logError(pluginJson, JSP(error))
-  }
-}
-export async function setPreset04() {
-  try {
-    await presetChosen(`setPreset04`)
-  } catch (error) {
-    logError(pluginJson, JSP(error))
-  }
-}
-export async function setPreset05() {
-  try {
-    await presetChosen(`setPreset05`)
   } catch (error) {
     logError(pluginJson, JSP(error))
   }
