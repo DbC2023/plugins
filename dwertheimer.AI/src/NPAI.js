@@ -7,6 +7,7 @@ import { log, logDebug, logError, logWarn, clo, JSP, timer } from '@helpers/dev'
 const baseURL = 'https://api.openai.com/v1'
 const modelsComponent = 'models'
 const imagesGenerationComponent = 'images/generations'
+// const completionsComponent = 'completions'
 
 /**
  * Format a Fetch request object for the OpenAI API, including the Authorization header and the contents of the post if any
@@ -50,13 +51,23 @@ export async function makeRequest(component: string, requestType: string = 'GET'
   if (result) {
     clo(result, `makeRequest() result of fetch to: "${url}"`)
     const resultJSON = JSON.parse(result)
-    if (resultJSON?.data) {
-      return resultJSON.data
+    if (resultJSON) {
+      return resultJSON
     } else if (resultJSON.error) {
       logError(pluginJson, `makeRequest received error: ${JSP(resultJSON.error)}`)
       await showMessage(`GPT API Returned Error: ${resultJSON.error.message}`)
     }
     return null
+  } else {
+    // must have failed, let's find out why
+    fetch(url, getRequestObj(requestType, data))
+      .then((result) => {
+        logError(pluginJson, `makeRequest failed the first time but the second response was: ${JSP(result)}`)
+      })
+      .catch((error) => {
+        logError(pluginJson, `makeRequest failed and response was: ${JSP(error)}`)
+        showMessage(`Fetch failed: ${JSP(error)}`)
+      })
   }
   return null
 }
@@ -66,7 +77,7 @@ export async function makeRequest(component: string, requestType: string = 'GET'
  * @returns {string|null} the model ID chosen
  */
 export async function chooseModel(): Promise<string | null> {
-  const models = await makeRequest(modelsComponent)
+  const models = (await makeRequest(modelsComponent))?.data
   if (models) {
     const modelOptions = models.map((model) => ({ label: model.id, value: model.id }))
     return await chooseOption('Choose a model', modelOptions)
@@ -80,9 +91,9 @@ export async function chooseModel(): Promise<string | null> {
  * Ask for a prompt and n results from user
  * @returns { prompt: string, n: number }
  */
-export async function getPromptAndNumberOfResults(promptIn: string | null = null, nIn: number | null = null): { prompt: string, n: number } {
-  const prompt = promptIn ?? (await CommandBar.showInput('Enter a prompt'))
-  const n = nIn ?? (await CommandBar.showInput('Enter the number of results to generate'))
+export async function getPromptAndNumberOfResults(promptIn: string | null = null, nIn: number | null = null): Promise<{ prompt: string, n: number }> {
+  const prompt = promptIn ?? (await CommandBar.showInput('Enter a prompt', 'Search for %@'))
+  const n = nIn ?? (await CommandBar.showInput('Enter the number of results to generate', 'Ask for %@ results'))
   return { prompt, n: parseInt(n) }
 }
 
@@ -95,8 +106,9 @@ export async function getPromptAndNumberOfResults(promptIn: string | null = null
  * @param {string} response_format - The format in which the generated images are returned. Must be one of url or b64_json
  * @param {string} user - A unique identifier representing your end-user, which can help OpenAI to monitor and detect abuse.
  */
-export function createImageRequestBody(prompt: string, n: number = 10, size: string = '1024x1024', response_format: string = 'url', user: string = null) {
+export function createImageRequestBody(prompt: string, n: number = 10, size: string = '1024x1024', response_format: string = 'url', user: string | null = null): any {
   const obj = { prompt, n, size, response_format }
+  // $FlowIgnore
   if (user) obj.user = user
   return obj
 }
@@ -130,18 +142,24 @@ export async function testConnection(model: string | null = null) {
  * Plugin entrypoint for command: "/COMMAND"
  * @param {*} incoming
  */
-export async function createAIImages(promptIn: string | null = null, nIn: number = 10, sizeIn: string = '1024x1024', response_formatIn: string = 'url', userIn: string = '') {
+export async function createAIImages(
+  promptIn: string | null = null,
+  nIn: number | null = null,
+  sizeIn: string = '1024x1024',
+  response_formatIn: string = 'url',
+  userIn: string = '',
+) {
   try {
-    // logDebug(pluginJson, `createImages running with prompt:${String(prompt) ${nIn} ${sizeIn} ${response_formatIn} ${userIn}`)
+    logDebug(pluginJson, `createImages running with prompt:${String(promptIn)} ${String(nIn)} ${sizeIn} ${response_formatIn} ${userIn}`)
 
     // get an image
     const start = new Date()
     const { prompt, n } = await getPromptAndNumberOfResults(promptIn, nIn)
-    const request = await makeRequest(imagesGenerationComponent, 'POST', createImageRequestBody(prompt, n, sizeIn, response_formatIn))
-    const time = timer(start)
+    const request = (await makeRequest(imagesGenerationComponent, 'POST', createImageRequestBody(prompt, n, sizeIn, response_formatIn)))?.data
+    const elapsed = timer(start)
     clo(request, `testConnection imageRequest result`)
     if (request) {
-      const msg = `Call to DALL-E took ${time}. ${request.length} results for "${prompt}":`
+      const msg = `Call to DALL-E took ${elapsed}. ${request.length} results for "${prompt}":`
       Editor.insertTextAtCursor(msg)
       request.forEach((r, i) => Editor.insertTextAtCursor(`[Result${i}](${r.url})`))
     }
@@ -149,3 +167,22 @@ export async function createAIImages(promptIn: string | null = null, nIn: number
     logError(pluginJson, JSP(error))
   }
 }
+
+// export async function getCompletions(promptIn: string | null = null, nIn: number = 10, modelIn: string | null = null, userIn: string = '') {
+//   try {
+//     logDebug(pluginJson, `getCompletions running with prompt:${String(promptIn)} ${String(nIn)} ${String(modelIn)} ${userIn}`)
+
+//     const start = new Date()
+//     const { prompt, n } = await getPromptAndNumberOfResults(promptIn, nIn)
+//     const request = await makeRequest(completionsComponent, 'POST', createImageRequestBody(prompt, n, sizeIn))
+//     const time = timer(start)
+//     clo(request, `testConnection imageRequest result`)
+//     if (request) {
+//       const msg = `Call to DALL-E took ${time}. ${request.length} results for "${prompt}":`
+//       Editor.insertTextAtCursor(msg)
+//       request.forEach((r, i) => Editor.insertTextAtCursor(`[Result${i}](${r.url})`))
+//     }
+//   } catch (error) {
+//     logError(pluginJson, JSP(error))
+//   }
+// }
